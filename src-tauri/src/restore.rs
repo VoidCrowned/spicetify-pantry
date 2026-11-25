@@ -63,11 +63,14 @@ pub struct Selection {
     pub indexed_db: BTreeMap<String, Database>,
     pub skipped_spotify: usize,
     pub skipped_account: usize,
+    /// Marketplace's store is replaced, not merged, so a restore removes installs the profile doesn't have.
+    pub replace_marketplace: bool,
+    pub live_mp: String,
 }
 
 /// `live_mp` is where the running Marketplace keeps its data: "indexeddb", "localStorage" or "none".
 pub fn select(p: &Profile, o: &Options, live_mp: &str, same_account: bool) -> Selection {
-    let mut s = Selection::default();
+    let mut s = Selection { live_mp: live_mp.into(), replace_marketplace: p.source == "cdp" && p.marketplace.storage != "none", ..Default::default() };
     let mut mp: BTreeMap<String, String> = BTreeMap::new();
     for (k, v) in &p.storage.local_storage {
         if attribute::is_never_restored(k) {
@@ -97,7 +100,7 @@ pub fn select(p: &Profile, o: &Options, live_mp: &str, same_account: bool) -> Se
     }
     mp.remove("internal:local-storage-migrated");
     match live_mp {
-        "indexeddb" if !mp.is_empty() => {
+        "indexeddb" if !mp.is_empty() || s.replace_marketplace => {
             let records = mp.iter().map(|(k, v)| json!({ "key": k, "value": { "key": k, "value": v } })).collect();
             let store = ObjectStore { key_path: json!("key"), records, ..Default::default() };
             let version = p.storage.indexed_db.get("spicetify-marketplace").map(|d| d.version).unwrap_or(20);
@@ -119,7 +122,15 @@ pub fn select(p: &Profile, o: &Options, live_mp: &str, same_account: bool) -> Se
 }
 
 pub fn payload(s: &Selection) -> Value {
-    json!({ "localStorage": s.local_storage, "indexedDB": s.indexed_db })
+    let mut v = json!({ "localStorage": s.local_storage, "indexedDB": s.indexed_db });
+    if s.replace_marketplace {
+        match s.live_mp.as_str() {
+            "indexeddb" => v["replace"] = json!([["spicetify-marketplace", "settings"]]),
+            "localStorage" => v["replaceLocalStoragePrefix"] = json!("marketplace:"),
+            _ => {}
+        }
+    }
+    v
 }
 
 /// Writes the profile's Spicetify files and ini entries. Returns (files written, files already identical).
@@ -302,7 +313,7 @@ pub fn restore(roots: &Roots, dir: &Path, id: &str, o: &Options, progress: Progr
     match cdp::eval_json(cdp::PORT, &js::restore(&payload(&sel))) {
         Ok(v) => {
             let errors: Vec<String> = v["errors"].as_array().into_iter().flatten().filter_map(|e| e.as_str().map(str::to_owned)).collect();
-            let mut d = format!("{} keys and {} database records written.", v["keys"], v["records"]);
+            let mut d = format!("{} keys and {} database records written, {} Marketplace entries not in the profile removed.", v["keys"], v["records"], v["removed"]);
             if sel.skipped_spotify > 0 {
                 d.push_str(&format!(" {} Spotify keys left out.", sel.skipped_spotify));
             }
@@ -405,6 +416,14 @@ mod tests {
     fn marketplace_goes_where_the_live_marketplace_reads() {
         let s = select(&profile(), &Options::default(), "localStorage", true);
         assert_eq!(s.local_storage.get("marketplace:tabs").map(String::as_str), Some("[]"));
+        assert_eq!(payload(&s)["replaceLocalStoragePrefix"], "marketplace:");
+        let i = select(&profile(), &Options::default(), "indexeddb", true);
+        assert_eq!(payload(&i)["replace"], json!([["spicetify-marketplace", "settings"]]));
+        let mut empty = profile();
+        empty.storage.indexed_db.get_mut("spicetify-marketplace").unwrap().stores.get_mut("settings").unwrap().records.truncate(1);
+        empty.marketplace.storage = "indexeddb".into();
+        let e = select(&empty, &Options::default(), "indexeddb", true);
+        assert!(e.indexed_db["spicetify-marketplace"].stores["settings"].records.is_empty(), "an empty Marketplace profile still replaces");
         assert!(!s.indexed_db.contains_key("spicetify-marketplace"));
         let none = select(&profile(), &Options::default(), "none", true);
         assert!(!none.local_storage.contains_key("marketplace:tabs"));

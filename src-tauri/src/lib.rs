@@ -222,6 +222,7 @@ pub fn cli(args: &[String]) -> i32 {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .invoke_handler(tauri::generate_handler![status, list_profiles, profile_details, capture, restore_check, restore, self_test, open_profiles_folder])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -48,6 +48,25 @@ fn fetch_code(url: &str) -> Option<String> {
     r.body_mut().with_config().limit(20 << 20).read_to_string().ok()
 }
 
+/// Script URLs on GitHub or jsDelivr that a small loader script pulls in (e.g. Sort Play's loader).
+pub fn loader_urls(code: &str) -> Vec<String> {
+    if code.len() > 64 << 10 {
+        return vec![]; // a full extension, not a loader
+    }
+    let re = regex::Regex::new(r#"https://(?:raw\.githubusercontent\.com|cdn\.jsdelivr\.net)/[^"'`\s)]+?\.m?js"#).unwrap();
+    let mut v: Vec<String> = re.find_iter(code).map(|m| m.as_str().to_owned()).collect();
+    v.dedup();
+    v.truncate(5);
+    v
+}
+
+/// The code itself plus, one level deep, the scripts it loads.
+fn follow_loader(code: String) -> Vec<String> {
+    let mut out: Vec<String> = loader_urls(&code).iter().filter_map(|u| fetch_code(u)).collect();
+    out.insert(0, code);
+    out
+}
+
 /// The live page's data, as returned by `js::capture()`.
 #[derive(Default)]
 pub struct Live {
@@ -174,7 +193,7 @@ fn candidates(userdata: &Path, ini: &Ini, mp: &BTreeMap<String, String>, theme: 
     // is covered by the local theme above; anything else that runs shows up in the self-check.
     let _ = config;
     let codes: Vec<Vec<String>> = std::thread::scope(|s| {
-        let handles: Vec<_> = items.iter().map(|it| s.spawn(|| it.urls.iter().filter_map(|u| fetch_code(u)).collect::<Vec<_>>())).collect();
+        let handles: Vec<_> = items.iter().map(|it| s.spawn(|| it.urls.iter().filter_map(|u| fetch_code(u)).flat_map(follow_loader).collect::<Vec<_>>())).collect();
         handles.into_iter().map(|h| h.join().unwrap_or_default()).collect()
     });
     for (it, code) in items.iter_mut().zip(codes) {
@@ -450,6 +469,13 @@ mod tests {
         assert!(p.storage.indexed_db["SomeExtDB"].stores["trackCache"].cache);
         assert!(!p.storage.indexed_db["SomeExtDB"].stores["settings"].cache);
         assert!(p.notes.iter().any(|n| n.contains("SomeExtDB")));
+    }
+
+    #[test]
+    fn finds_loader_urls() {
+        let code = "const u = \"https://raw.githubusercontent.com/hoeci/sort-play/main/sort-play.js\"; fetch(`https://cdn.jsdelivr.net/gh/a/b@main/x.mjs`); \"https://example.com/y.js\"";
+        assert_eq!(loader_urls(code), vec!["https://raw.githubusercontent.com/hoeci/sort-play/main/sort-play.js", "https://cdn.jsdelivr.net/gh/a/b@main/x.mjs"]);
+        assert!(loader_urls(&"x".repeat(70_000)).is_empty());
     }
 
     #[test]

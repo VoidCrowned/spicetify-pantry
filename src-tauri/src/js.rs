@@ -97,11 +97,15 @@ pub fn capture() -> String {
 /// Writes localStorage keys and IndexedDB records. `payload` is
 /// `{ localStorage: {k: v}, indexedDB: { name: { version, stores: { s: { keyPath, autoIncrement, indexes, records } } } } }`.
 /// Missing databases and stores are created from the captured schema; existing records with the same key are replaced.
+/// `replace: [[db, store]]` also deletes records missing from the payload (except `internal:*` keys), and
+/// `replaceLocalStoragePrefix` deletes localStorage keys with that prefix that the payload doesn't set.
 pub fn restore(payload: &serde_json::Value) -> String {
     format!(
         r#"(async () => {{ {CODEC}
   const p = {payload};
   let keys = 0, records = 0; const errors = [];
+  let removed = 0;
+  if (p.replaceLocalStoragePrefix) for (const k of Object.keys(localStorage)) if (k.startsWith(p.replaceLocalStoragePrefix) && !(k in (p.localStorage || {{}}))) {{ localStorage.removeItem(k); removed++; }}
   for (const [k, v] of Object.entries(p.localStorage || {{}})) {{ try {{ localStorage.setItem(k, v); keys++; }} catch (e) {{ errors.push(k + ': ' + e); }} }}
   const existing = new Map((indexedDB.databases ? await indexedDB.databases() : []).map(d => [d.name, d.version]));
   for (const [name, d] of Object.entries(p.indexedDB || {{}})) {{
@@ -125,15 +129,21 @@ pub fn restore(payload: &serde_json::Value) -> String {
         }});
       }}
       for (const [s, sd] of Object.entries(d.stores)) {{
-        if (!sd.records.length) continue;
+        const replace = (p.replace || []).some(([a, b]) => a === name && b === s);
+        if (!sd.records.length && !replace) continue;
         const tx = db.transaction(s, 'readwrite'); const st = tx.objectStore(s);
+        if (replace) {{
+          const keep = new Set(sd.records.map(r => JSON.stringify(dec(r.key))));
+          const all = await new Promise((ok, bad) => {{ const r = st.getAllKeys(); r.onsuccess = () => ok(r.result); r.onerror = () => bad(r.error); }});
+          for (const k of all) if (!keep.has(JSON.stringify(k)) && !(typeof k === 'string' && k.startsWith('internal:'))) {{ st.delete(k); removed++; }}
+        }}
         for (const r of sd.records) {{ const v = dec(r.value); if (st.keyPath === null) st.put(v, dec(r.key)); else st.put(v); records++; }}
         await new Promise((ok, bad) => {{ tx.oncomplete = ok; tx.onerror = () => bad(tx.error); tx.onabort = () => bad(tx.error); }});
       }}
       db.close();
     }} catch (e) {{ errors.push(name + ': ' + e); }}
   }}
-  return JSON.stringify({{ keys, records, errors }});
+  return JSON.stringify({{ keys, records, removed, errors }});
 }})()"#
     )
 }
@@ -144,7 +154,7 @@ pub fn check(globals: &[String], scripts: &[String]) -> String {
     let s = serde_json::to_string(scripts).unwrap();
     format!(
         r#"(() => {{
-  const srcs = [...document.scripts].map(x => decodeURIComponent(x.src || ''));
+  const srcs = [...document.scripts].map(x => decodeURIComponent((x.src || '').split('?')[0]));
   const g = {g}, s = {s};
   return JSON.stringify({{
     globals: Object.fromEntries(g.map(n => [n, typeof window[n] !== 'undefined'])),
