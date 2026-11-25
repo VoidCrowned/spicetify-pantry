@@ -34,7 +34,7 @@ Works on Spotify 1.3.10.2586 / Spicetify 2.46.7 ([`spike/dump.ps1`](../spike/dum
 - Launch `%APPDATA%\Spotify\Spotify.exe --remote-debugging-port=9222` directly. No `config-xpui.ini` change needed.
 - `GET http://127.0.0.1:9222/json/list` → one `page` target, `https://xpui.app.spotify.com/index.html`. The page appeared within 10 s; `Spicetify.Platform` and `Spicetify.LocalStorage` exist soon after. Allow 40–60 s on a cold start.
 - `Runtime.evaluate` with `returnByValue` + `awaitPromise` on the page's `webSocketDebuggerUrl` reads everything: no `--remote-allow-origins` needed for a client that sends no `Origin` header.
-- Close with `Browser.close` on the browser target (`/json/version` → `webSocketDebuggerUrl`). Spotify exited cleanly within seconds every time (3 runs), with no "Spotify didn't shut down correctly" on the next start.
+- Close with `Browser.close` on the browser target (`/json/version` → `webSocketDebuggerUrl`). Spotify exited within seconds in all 3 runs.
 - Pitfalls: .NET's `ClientWebSocket` uses the system proxy (set `Options.Proxy = $null`); PowerShell 5.1 doesn't unroll a JSON array from `ConvertFrom-Json`.
 
 Key families seen (130 keys on a fresh Spicetify + Marketplace setup):
@@ -47,7 +47,7 @@ Key families seen (130 keys on a fresh Spicetify + Marketplace setup):
 | `spicetify-exp-features` | | Spicetify (experimental feature toggles) | Yes |
 | anything else | `gpb:settings` | extensions | Yes |
 
-`<userId>` is the account's `Spicetify.Platform.username`. Pantry stores it hashed, never in clear text in docs or issues.
+`<userId>` is the account's `Spicetify.Platform.username`. Decision: profiles store it as a SHA-256 hash, enough to warn on an account mismatch.
 
 **Marketplace no longer uses localStorage.** Since Marketplace PR #1181 (July 2026; installed here: v1.0.12, the latest), every `marketplace:*` key lives in IndexedDB: database `spicetify-marketplace` (Dexie, IndexedDB version 20), object store `settings`, records `{ key, value }` with string values. On first start it copies legacy `marketplace:*` localStorage keys into IndexedDB, writes the sentinel `internal:local-storage-migrated = 1`, then **deletes** them from localStorage. After that, `marketplace:*` keys written to localStorage are deleted on the next start, not imported.
 
