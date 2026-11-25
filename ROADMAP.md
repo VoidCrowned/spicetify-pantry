@@ -9,15 +9,15 @@
 - [x] Key map for my own extensions (#6)
 
 ## 2 – Capture & restore MVP
-- [ ] Profile format (#7)
-- [ ] Detection in Rust (#8)
-- [ ] CDP client (#9)
-- [ ] Capture (#10)
-- [ ] Key attribution (#11)
-- [ ] Restore (#12)
-- [ ] UI: profiles, Capture, Restore, details (#13)
-- [ ] Self-test (#14)
-- [ ] Packaging: NSIS test builds (#15)
+- [x] Profile format (#7)
+- [x] Detection in Rust (#8)
+- [x] CDP client (#9)
+- [x] Capture (#10)
+- [x] Key attribution (#11)
+- [x] Restore (#12)
+- [x] UI: profiles, Capture, Restore, details (#13)
+- [x] Self-test (#14)
+- [x] Packaging: NSIS test builds (#15)
 
 ## Future
 - Linux and macOS support (#16)
@@ -25,3 +25,4 @@
 - LevelDB emergency recovery UI (#18)
 - Live sync via an optional companion extension (#19)
 - Version manager (#20)
+- Code signing (#28)

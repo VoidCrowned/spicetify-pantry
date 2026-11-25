@@ -103,3 +103,7 @@ Decision: capture every IndexedDB database except Spotify's (`keyval-store`) ove
 | Gradient Bars | `gradientBars.js` | both bars' keys (no keys of its own) | `window.__gb` (+ `__gpb`, `__gcb`) |
 
 Self-tests use `gpb:selftest:*` / `gcb:selftest:*` while they run; the `gpb:` / `gcb:` prefixes cover them. A key can belong to more than one extension (Gradient Bars shares both bars' keys), so attribution assigns it to every installed extension that claims it.
+
+## 7. Smart App Control blocks unsigned builds
+
+Windows 11's Smart App Control (`HKLM\SYSTEM\CurrentControlSet\Control\CI\Policy` → `VerifiedAndReputablePolicyState`: 0 off, 1 on, 2 evaluation) blocked unsigned Pantry builds with "blocked by your organization's Device Guard policy" (Code Integrity events 3033/3077/3118). The first build ran, the next ones were blocked. On my dev laptop it's now off. Every user with Smart App Control on will hit this until Pantry is signed with a certificate from a Microsoft-trusted CA (#28).
