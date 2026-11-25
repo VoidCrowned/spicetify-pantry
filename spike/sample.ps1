@@ -1,6 +1,6 @@
 # Pantry spike: collect a redacted sample of a modded Spotify setup for docs/findings.md (#3, #4).
 # Run in PowerShell with Spotify closed:
-#   irm https://raw.githubusercontent.com/VoidCrowned/spicetify-pantry/spike-cdp/spike/sample.ps1 | iex
+#   irm https://raw.githubusercontent.com/VoidCrowned/spicetify-pantry/main/spike/sample.ps1 | iex
 # It starts Spotify with a local debugging port, reads localStorage and IndexedDB (read-only),
 # closes Spotify normally and writes pantry-sample.json to your Desktop. It never kills Spotify and writes nothing to Spotify.
 # Redacted: your Spotify user ID, Spotify's own values (key names and sizes only), telemetry (count only), Spotify's cache DB.

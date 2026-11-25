@@ -53,7 +53,39 @@ Key families seen (130 keys on a fresh Spicetify + Marketplace setup):
 
 Decision: Pantry captures both stores and restores `marketplace:*` into whichever one the installed Marketplace uses (IndexedDB if the database and sentinel exist, localStorage otherwise). Writes still go only through CDP. Reading IndexedDB over CDP must never create a database: check `indexedDB.databases()` first and open without a version.
 
-## 5. Local Storage LevelDB, read-only (#5)
+## 4. Marketplace records (#4)
+
+From a redacted sample of my main PC (Spotify 1.3.10.2586, Spicetify 2.46.7, Marketplace v1.0.12, Hazy theme, 14 Marketplace extensions, 4 snippets; [`spike/sample.ps1`](../spike/sample.ps1)). All records sit in IndexedDB `spicetify-marketplace` → `settings` as `{ key, value }`, values are strings.
+
+| Key | Value |
+|---|---|
+| `marketplace:installed-extensions` | JSON array of per-item keys |
+| `marketplace:installed-themes` | JSON array of per-item keys |
+| `marketplace:installed-snippets` | JSON array of per-item keys |
+| `marketplace:theme-installed` | per-item key of the active theme (absent: no Marketplace theme) |
+| `marketplace:installed:<user>/<repo>/<path of main>` | extension record (JSON) |
+| `marketplace:installed:<user>/<repo>/<cssURL>` | theme record (JSON) |
+| `marketplace:installed:snippet:<Title-With-Dashes>` | snippet record (JSON) |
+| `marketplace:local-theme`, `:tabs`, `:active-tab`, `:sort`, `:themeDevTools`, `:albumArtBasedColors*`, `:colorShift`, … | Marketplace settings and UI state |
+| `internal:local-storage-migrated` | `"1"`: migration sentinel (not a `marketplace:` key) |
+
+Record fields:
+- **Extension**: `type: "extension"`, `manifest` (the repo's manifest entry), `title`, `subtitle`, `authors`, `user`, `repo`, `branch`, `imageURL`, `extensionURL` (what Marketplace loads on every start), `readmeURL`, `stars`, `lastUpdated`, `created`.
+- **Theme**: the same plus `cssURL`, `schemesURL`, `include` (theme JS URLs, e.g. Hazy's `hazy.js`), `tags`, `schemes` (all colour schemes, parsed), `activeScheme`. **Theme and colour scheme come from here**: the ini only says `current_theme = marketplace`. `Spicetify.Config` reports the live pair (`Hazy` / `Base`).
+- **Snippet**: `code` (CSS), `title`, `description`, `imageURL`.
+
+Other observations:
+- `Spicetify.Config.extensions` lists everything that runs: the ini's local files, Marketplace extensions and theme JS (17 here, while the ini lists only `gradientBars.js`). This is the list for the post-restore self-check.
+- `Extensions\` can hold files the ini no longer lists (6 here). Pantry captures only the files the ini lists and shows the others as "not enabled".
+- Hazy's settings use unprefixed keys (`HideMerch`, `blurAmount`, …), so attribution needs the static scan of theme JS (`include`), not just prefixes.
+- Values can contain API tokens (`more-lyrics.api-token`). Profiles stay on the PC; Pantry warns before a profile is shared.
+
+### Extensions with their own IndexedDB
+
+Sort Play keeps 125 settings in its own database (`SortPlayDB` → `settings`), next to cache stores with thousands of records. `keyval-store` is Spotify's own query cache.
+
+Decision: capture every IndexedDB database except Spotify's (`keyval-store`) over CDP, with a tagged encoding for values that aren't plain JSON (Date, ArrayBuffer, typed arrays, Blob, Map, Set). Restore writes them back over CDP. Stores whose names look like caches are captured but not restored by default.
+, read-only (#5)
 
 - Folder: `%LOCALAPPDATA%\Spotify\Browser\Local Storage\leveldb`. Pantry never opens it in place: with Spotify closed it copies the folder to a temp dir, drops `LOCK`, and opens the copy with `rusty-leveldb` (default comparator works).
 - Key: `_https://xpui.app.spotify.com` `\0` + a type byte + the key; value: a type byte + the value. Type byte `1` = Latin-1 (one byte per character), `0` = UTF-16LE. All 130 keys here were Latin-1. Other entries: `VERSION`, `META:https://xpui.app.spotify.com`, `METAACCESS:…`.

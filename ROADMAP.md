@@ -4,7 +4,7 @@
 - [x] Detect Spotify installs (#1)
 - [x] Detect Spicetify (#2)
 - [x] Dump localStorage over CDP (#3)
-- [ ] Document marketplace:* keys (#4)
+- [x] Document marketplace:* keys (#4)
 - [x] Read-only LevelDB decode (#5)
 - [x] Key map for my own extensions (#6)
 
