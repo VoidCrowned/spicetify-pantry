@@ -292,9 +292,7 @@ pub fn build(det: &Detection, live: Live, spicetify_version: Option<String>, sou
     } else {
         (None, None, "none")
     };
-    let marketplace_version = std::fs::read_to_string(userdata.join("CustomApps/marketplace/extension.js"))
-        .ok()
-        .and_then(|t| regex::Regex::new(r"Spicetify Marketplace v([0-9][0-9.]*[0-9])").unwrap().captures(&t).map(|c| c[1].to_owned()));
+    let marketplace_version = crate::restore::marketplace_version(&userdata);
 
     let mut extensions: Vec<Extension> = items.into_iter().map(|i| i.ext).collect();
     if !spicetify_ext.keys.is_empty() {
@@ -355,9 +353,12 @@ pub fn connect(det: &Detection, progress: Progress) -> Result<(), CaptureError> 
             let exe = &det.spotify.as_ref().ok_or(CaptureError::Other("Spotify isn't installed.".into()))?.exe;
             progress("Starting Spotify…");
             spotify::launch(exe).map_err(|e| CaptureError::Other(format!("couldn't start Spotify: {e}")))?;
-            spotify::wait_ready(Duration::from_secs(90)).map_err(CaptureError::Other)?;
+            spotify::wait_page(Duration::from_secs(90)).map_err(CaptureError::Other)?;
+            // Give Spicetify and extensions time to load; on stock Spotify this just times out.
             progress("Waiting for extensions to load…");
-            std::thread::sleep(Duration::from_secs(8));
+            if spotify::wait_ready(Duration::from_secs(20)).is_ok() {
+                std::thread::sleep(Duration::from_secs(8));
+            }
             Ok(())
         }
     }
@@ -373,7 +374,11 @@ pub fn capture(roots: &Roots, dir: &Path, reason: &str, progress: Progress) -> R
         Ok(()) => {
             progress("Reading settings from Spotify…");
             let v = cdp::eval_json(cdp::PORT, &js::capture()).map_err(|e| CaptureError::Other(e.to_string()))?;
-            (parse_live(&v), "cdp")
+            let live = parse_live(&v);
+            if live.config.is_null() {
+                progress("Spicetify isn't applied right now; capturing what Spotify still has…");
+            }
+            (live, "cdp")
         }
         Err(CaptureError::Other(e)) if !spotify::is_running() => {
             progress("Spotify didn't start; reading a copy of its Local Storage instead…");
@@ -382,10 +387,14 @@ pub fn capture(roots: &Roots, dir: &Path, reason: &str, progress: Progress) -> R
         }
         Err(e) => return Err(e),
     };
+    let applied = !live.config.is_null();
     progress("Sorting keys by extension…");
     let mut p = build(&det, live, cli_version, source, reason, chrono::Utc::now());
     if source == "leveldb" {
         p.notes.push("Read from a copy of Local Storage with Spotify closed: Marketplace data and extension databases (IndexedDB) aren't included.".into());
+    }
+    if source == "cdp" && !applied {
+        p.notes.push("Spicetify wasn't applied when this was captured: settings and Marketplace data are included, extensions weren't running.".into());
     }
     let path = p.save(dir).map_err(|e| CaptureError::Other(format!("saving the profile: {e}")))?;
     Ok((p, path))

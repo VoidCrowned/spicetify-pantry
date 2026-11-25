@@ -131,7 +131,7 @@ pub fn run(roots: &Roots, dir: &Path, progress: Progress) -> SelfTest {
                 }
             }
             Ok(()) => {
-                t.add("Spotify connection", cdp::eval_json(cdp::PORT, js::READY).map_err(|e| e.to_string()).and_then(|v| ok_if(v == true, "Spicetify loaded", "Spicetify not loaded")));
+                t.add("Spotify connection", ok_if(spotify::spicetify_loaded(), "Spicetify loaded", "Spotify runs, but Spicetify isn't applied (run spicetify apply)"));
                 t.add(
                     "Page round trip",
                     cdp::eval_json(cdp::PORT, &js::selftest_roundtrip("pantry:selftest")).map_err(|e| e.to_string()).and_then(|v| {

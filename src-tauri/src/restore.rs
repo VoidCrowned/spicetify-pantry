@@ -50,6 +50,11 @@ pub fn check(p: &Profile, det: &Detection, spicetify_now: Option<&str>) -> Check
             c.warnings.push(format!("Spicetify version differs: profile {a}, installed {b}."));
         }
     }
+    if let (Some(a), Some(b)) = (&p.versions.marketplace, det.spicetify.as_ref().and_then(|s| marketplace_version(&s.userdata))) {
+        if *a != b && p.files.keys().any(|k| k.starts_with("CustomApps/marketplace/")) {
+            c.warnings.push(format!("Marketplace version differs: the restore puts back {a} (installed now: {b})."));
+        }
+    }
     if p.source == "leveldb" {
         c.warnings.push("This profile was read with Spotify closed: it has no Marketplace data or extension databases.".into());
     }
@@ -207,21 +212,37 @@ impl Report {
     }
 }
 
-fn wait_marketplace(expect: bool) -> String {
-    if !expect {
-        return "none".into();
+/// Does the installed Marketplace keep its data in IndexedDB (Marketplace PR #1181 and later)?
+pub fn marketplace_uses_indexeddb(userdata: &Path) -> Option<bool> {
+    let code = std::fs::read_to_string(userdata.join("CustomApps").join("marketplace").join("extension.js")).ok()?;
+    Some(code.contains("spicetify-marketplace") && code.contains("internal:local-storage-migrated"))
+}
+
+/// The installed Marketplace version, from its start-up log line.
+pub fn marketplace_version(userdata: &Path) -> Option<String> {
+    let code = std::fs::read_to_string(userdata.join("CustomApps").join("marketplace").join("extension.js")).ok()?;
+    regex::Regex::new(r"Spicetify Marketplace v([0-9][0-9.]*[0-9])").unwrap().captures(&code).map(|c| c[1].to_owned())
+}
+
+/// Where the running Marketplace reads from. For IndexedDB, waits until Marketplace has created its database,
+/// so restored records aren't overwritten by its first start.
+fn wait_marketplace(userdata: &Path, installed: bool) -> Result<String, String> {
+    if !installed {
+        return Ok("none".into());
+    }
+    match marketplace_uses_indexeddb(userdata) {
+        Some(false) => return Ok("localStorage".into()),
+        None => return Err("Marketplace is enabled, but its files are missing.".into()),
+        Some(true) => {}
     }
     let t0 = std::time::Instant::now();
-    while t0.elapsed() < Duration::from_secs(30) {
-        if let Ok(v) = cdp::eval_json(cdp::PORT, js::MARKETPLACE_STATE) {
-            if v["indexedDb"] == true {
-                return "indexeddb".into();
-            }
+    while t0.elapsed() < Duration::from_secs(60) {
+        if cdp::eval_json(cdp::PORT, js::MARKETPLACE_STATE).is_ok_and(|v| v["indexedDb"] == true) {
+            return Ok("indexeddb".into());
         }
         std::thread::sleep(Duration::from_millis(700));
     }
-    // An old Marketplace (before PR #1181) never creates the database.
-    "localStorage".into()
+    Err("Marketplace didn't create its database within 60 s.".into())
 }
 
 fn reload_and_wait() -> Result<(), String> {
@@ -302,7 +323,10 @@ pub fn restore(roots: &Roots, dir: &Path, id: &str, o: &Options, progress: Progr
     }
     r.step("Start Spotify", true, "Running with Pantry's connection.");
 
-    let live_mp = wait_marketplace(p.ini.custom_apps.iter().any(|a| a == "marketplace"));
+    let live_mp = match wait_marketplace(&userdata, p.ini.custom_apps.iter().any(|a| a == "marketplace")) {
+        Ok(m) => m,
+        Err(e) => return { r.step("Marketplace", false, e); r },
+    };
     let live = cdp::eval_json(cdp::PORT, "JSON.stringify(Spicetify.Platform.username || null)").ok();
     let same_account = match (&p.account_hash, live.as_ref().and_then(|v| v.as_str())) {
         (Some(h), Some(u)) => *h == sha256_hex(u.as_bytes()),
@@ -451,6 +475,19 @@ mod tests {
         f.sha256 = "0".repeat(64);
         bad.files.insert("Extensions/b.js".into(), f);
         assert!(write_spicetify(&bad, ud).unwrap_err().contains("checksum"));
+    }
+
+    #[test]
+    fn marketplace_storage_from_its_code() {
+        let t = tempfile::tempdir().unwrap();
+        assert_eq!(marketplace_uses_indexeddb(t.path()), None);
+        let d = t.path().join("CustomApps/marketplace");
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(d.join("extension.js"), "console.log(\"Initializing Spicetify Marketplace v1.0.12\");new Dexie(\"spicetify-marketplace\");\"internal:local-storage-migrated\"").unwrap();
+        assert_eq!(marketplace_uses_indexeddb(t.path()), Some(true));
+        assert_eq!(marketplace_version(t.path()).as_deref(), Some("1.0.12"));
+        std::fs::write(d.join("extension.js"), "localStorage.getItem(\"marketplace:installed-extensions\")").unwrap();
+        assert_eq!(marketplace_uses_indexeddb(t.path()), Some(false));
     }
 
     #[test]

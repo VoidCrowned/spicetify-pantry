@@ -11,7 +11,7 @@ My Windows app backs up and restores Spicetify extensions **and their settings**
 
 Pantry never writes to Spotify's storage files. It talks to Spotify through its debugging port while Spotify runs, and closes Spotify the normal way, never by force. Profiles stay on your PC in `%APPDATA%\Pantry\profiles`. They can contain API tokens that extensions store, so think before sharing one.
 
-Needs the regular Spotify installer (not the Microsoft Store version) and Spicetify.
+Needs the regular Spotify installer (not the Microsoft Store version) and Spicetify. Builds aren't code-signed yet: Windows SmartScreen asks first (More info → Run anyway), and Windows 11 with Smart App Control on blocks Pantry.
 
 ## Building
 

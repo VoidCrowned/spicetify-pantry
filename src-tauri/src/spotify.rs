@@ -49,16 +49,30 @@ pub fn launch(exe: &Path) -> std::io::Result<()> {
     Command::new(exe).arg(format!("--remote-debugging-port={}", cdp::PORT)).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().map(|_| ())
 }
 
-/// Waits until the xpui page answers and Spicetify is loaded.
+/// Waits until the xpui page answers and Spicetify is loaded (after `spicetify apply`).
 pub fn wait_ready(timeout: Duration) -> Result<(), String> {
+    wait_for(crate::js::READY, timeout).map_err(|_| format!("Spotify started, but Spicetify didn't load within {} s", timeout.as_secs()))
+}
+
+/// Waits until the xpui page has loaded, with or without Spicetify.
+pub fn wait_page(timeout: Duration) -> Result<(), String> {
+    wait_for(crate::js::PAGE_READY, timeout).map_err(|_| format!("Spotify didn't finish loading within {} s", timeout.as_secs()))
+}
+
+fn wait_for(expr: &str, timeout: Duration) -> Result<(), ()> {
     let t0 = Instant::now();
     while t0.elapsed() < timeout {
-        if let Ok(serde_json::Value::Bool(true)) = cdp::eval_json(cdp::PORT, crate::js::READY) {
+        if let Ok(serde_json::Value::Bool(true)) = cdp::eval_json(cdp::PORT, expr) {
             return Ok(());
         }
         std::thread::sleep(Duration::from_millis(700));
     }
-    Err(format!("Spotify didn't finish loading within {} s", timeout.as_secs()))
+    Err(())
+}
+
+/// Is Spicetify running in the page?
+pub fn spicetify_loaded() -> bool {
+    matches!(cdp::eval_json(cdp::PORT, crate::js::READY), Ok(serde_json::Value::Bool(true)))
 }
 
 /// Closes Spotify gracefully and waits for the process to end.

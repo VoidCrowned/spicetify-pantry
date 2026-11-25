@@ -47,6 +47,9 @@ const req = (r) => new Promise((ok, bad) => { r.onsuccess = () => ok(r.result); 
 /// Is Spicetify up in the page?
 pub const READY: &str = "JSON.stringify(!!(window.Spicetify && Spicetify.Platform && Spicetify.LocalStorage && Spicetify.Config))";
 
+/// Is the xpui page loaded? Works on stock Spotify too (Spotify updated, or `spicetify restore` was run).
+pub const PAGE_READY: &str = "JSON.stringify(document.readyState === 'complete' && location.host === 'xpui.app.spotify.com')";
+
 /// Has Marketplace finished hydrating its IndexedDB? `null` when Marketplace doesn't use IndexedDB.
 pub const MARKETPLACE_STATE: &str = r#"(async () => {
   const dbs = indexedDB.databases ? await indexedDB.databases() : [];
@@ -83,9 +86,9 @@ pub fn capture() -> String {
     idb[name] = {{ version, stores }};
   }}
   return JSON.stringify({{
-    spotifyVersion: Spicetify.Platform && Spicetify.Platform.version,
-    username: (Spicetify.Platform && Spicetify.Platform.username) || null,
-    config: Spicetify.Config,
+    spotifyVersion: window.Spicetify?.Platform?.version ?? null,
+    username: window.Spicetify?.Platform?.username ?? null,
+    config: window.Spicetify?.Config ?? null,
     scripts: [...document.scripts].map(s => s.src).filter(Boolean),
     localStorage: ls,
     indexedDB: idb
@@ -159,7 +162,7 @@ pub fn check(globals: &[String], scripts: &[String]) -> String {
   return JSON.stringify({{
     globals: Object.fromEntries(g.map(n => [n, typeof window[n] !== 'undefined'])),
     scripts: Object.fromEntries(s.map(n => [n, srcs.some(x => x.endsWith(n) || x === n)])),
-    config: Spicetify.Config
+    config: window.Spicetify?.Config ?? null
   }});
 }})()"#
     )

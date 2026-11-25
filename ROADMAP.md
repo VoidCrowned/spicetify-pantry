@@ -25,3 +25,4 @@
 - LevelDB emergency recovery UI (#18)
 - Live sync via an optional companion extension (#19)
 - Version manager (#20)
+- Code signing (#28)
