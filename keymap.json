@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "extensions": {
+    "gradient-progress-bar": {
+      "name": "Gradient Progress Bar",
+      "files": ["gradientProgressBar.js"],
+      "keys": ["gpb:settings", "gpb:presets"],
+      "prefixes": ["gpb:"],
+      "globals": ["__gpb"]
+    },
+    "gradient-connect-bar": {
+      "name": "Gradient Connect Bar",
+      "files": ["gradientConnectBar.js"],
+      "keys": ["gcb:settings", "gcb:presets"],
+      "prefixes": ["gcb:"],
+      "globals": ["__gcb"]
+    },
+    "gradient-bars": {
+      "name": "Gradient Bars",
+      "files": ["gradientBars.js"],
+      "keys": ["gpb:settings", "gpb:presets", "gcb:settings", "gcb:presets"],
+      "prefixes": ["gpb:", "gcb:"],
+      "globals": ["__gb", "__gpb", "__gcb"]
+    }
+  }
+}
