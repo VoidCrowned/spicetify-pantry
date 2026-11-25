@@ -26,3 +26,15 @@ Store column: **not tested here** (no Store install on this PC); paths come from
   - `[Setting] current_theme`, `color_scheme` (here: `marketplace`, empty), `spotify_launch_flags`.
   - `[Backup] version` / `with`: the Spotify build and Spicetify version the backup was made with. This is the most reliable "which versions does this setup belong to" pair.
 - With the Marketplace, the theme is the `marketplace` placeholder folder: the real theme and its colour scheme live in localStorage (see section 4).
+
+## 6. Key map (#6)
+
+[`keymap.json`](../keymap.json) maps extensions to their localStorage keys, key prefixes, file names and window globals. First entries: my own extensions, taken from their source (spicetify-gradient-bars):
+
+| Extension | File | Keys | Global |
+|---|---|---|---|
+| Gradient Progress Bar | `gradientProgressBar.js` | `gpb:settings`, `gpb:presets` | `window.__gpb` |
+| Gradient Connect Bar | `gradientConnectBar.js` | `gcb:settings`, `gcb:presets` | `window.__gcb` |
+| Gradient Bars | `gradientBars.js` | both bars' keys (no keys of its own) | `window.__gb` (+ `__gpb`, `__gcb`) |
+
+Self-tests use `gpb:selftest:*` / `gcb:selftest:*` while they run; the `gpb:` / `gcb:` prefixes cover them. A key can belong to more than one extension (Gradient Bars shares both bars' keys), so attribution assigns it to every installed extension that claims it.

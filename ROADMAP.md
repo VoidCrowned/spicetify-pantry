@@ -6,7 +6,7 @@
 - [ ] Dump localStorage over CDP (#3)
 - [ ] Document marketplace:* keys (#4)
 - [ ] Read-only LevelDB decode (#5)
-- [ ] Key map for my own extensions (#6)
+- [x] Key map for my own extensions (#6)
 
 ## 2 – Capture & restore MVP
 - [ ] Profile format (#7)
