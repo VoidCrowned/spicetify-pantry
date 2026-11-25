@@ -3,9 +3,9 @@
 ## 1 – Verification spike
 - [x] Detect Spotify installs (#1)
 - [x] Detect Spicetify (#2)
-- [ ] Dump localStorage over CDP (#3)
-- [ ] Document marketplace:* keys (#4)
-- [ ] Read-only LevelDB decode (#5)
+- [x] Dump localStorage over CDP (#3)
+- [x] Document marketplace:* keys (#4)
+- [x] Read-only LevelDB decode (#5)
 - [x] Key map for my own extensions (#6)
 
 ## 2 – Capture & restore MVP
