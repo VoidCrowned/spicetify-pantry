@@ -42,15 +42,15 @@ async function refreshStatus() {
   const el = $("status");
   try {
     const s = await invoke<Status>("status");
-    const parts: string[] = [];
+    const parts: string[] = [s.spotifyState === "connected" ? `<span class="connected">connected</span>` : `<span class="disconnected">not connected</span>`];
     const sp = s.detection.spotify;
     if (!sp) parts.push(s.detection.storeSpotify ? `<span class="bad">Microsoft Store Spotify isn't supported by Spicetify. Install the regular version from spotify.com.</span>` : `<span class="bad">Spotify isn't installed</span>`);
-    else {
-      const state = { connected: `<span class="good">connected</span>`, closed: "closed", runningWithoutPort: `<span class="warn">running – exit it (⋯ → File → Exit) so Pantry can connect</span>` }[s.spotifyState];
-      parts.push(`Spotify ${short(sp.version)}: ${state}`);
-    }
+    else parts.push(`Spotify ${short(sp.version)}`);
     parts.push(s.spicetifyVersion ? `Spicetify ${esc(s.spicetifyVersion)}` : `<span class="bad">Spicetify isn't installed</span>`);
     el.innerHTML = parts.join(" · ");
+    const open = s.spotifyState === "runningWithoutPort";
+    $("banner").hidden = !open;
+    $<HTMLButtonElement>("capture").disabled = open;
   } catch (e) {
     el.textContent = String(e);
   }
@@ -60,7 +60,7 @@ async function refreshProfiles() {
   const list = await invoke<Summary[]>("list_profiles");
   const el = $("profiles");
   if (!list.length) {
-    el.innerHTML = `<p class="empty">No profiles yet. Press Capture to make the first one.</p>`;
+    el.innerHTML = `<p class="empty">No profiles yet. Press Back up settings to make the first one.</p>`;
     return;
   }
   el.innerHTML = list
@@ -73,6 +73,7 @@ async function refreshProfiles() {
         <div class="buttons">
           <button class="quiet" data-details="${esc(p.id)}">Details</button>
           <button class="quiet" data-export="${esc(p.id)}">Export</button>
+          <button class="danger" data-delete="${esc(p.id)}" data-when="${esc(when(p.createdAt))}">Delete</button>
           <button data-restore="${esc(p.id)}">Restore</button>
         </div>
       </article>`,
@@ -127,12 +128,12 @@ function endBusy(steps: Step[], headline: string) {
 
 async function capture() {
   if (busy) return;
-  startBusy("Capturing");
+  startBusy("Backing up");
   try {
     const s = await invoke<Summary>("capture");
     endBusy([{ name: "Saved", ok: true, detail: `${s.extensions} extensions and ${s.keys} settings.` }], "Done.");
   } catch (e) {
-    endBusy([{ name: "Capture", ok: false, detail: String(e) }], "Nothing was saved.");
+    endBusy([{ name: "Back up", ok: false, detail: String(e) }], "Nothing was saved.");
   }
 }
 
@@ -203,6 +204,27 @@ async function importProfile() {
   }
 }
 
+let deleting: string | null = null;
+function askDelete(id: string, label: string) {
+  if (busy) return;
+  deleting = id;
+  $("delete-text").textContent = `Delete the profile from ${label}? It goes to the Recycle Bin, so you can still get it back from there.`;
+  $<HTMLDialogElement>("delete").showModal();
+}
+
+async function deleteProfile() {
+  const id = deleting;
+  if (!id) return;
+  $<HTMLDialogElement>("delete").close();
+  try {
+    await invoke("delete_profile", { id });
+  } catch (e) {
+    startBusy("Deleting");
+    endBusy([{ name: "Delete", ok: false, detail: String(e) }], "Nothing was deleted.");
+  }
+  refreshProfiles();
+}
+
 async function selfTest() {
   if (busy) return;
   const out = $("selftest-result");
@@ -231,13 +253,15 @@ window.addEventListener("DOMContentLoaded", () => {
   $("open-folder").addEventListener("click", () => invoke("open_profiles_folder"));
   $("import").addEventListener("click", importProfile);
   $("export-go").addEventListener("click", exportProfile);
+  $("delete-go").addEventListener("click", deleteProfile);
   document.addEventListener("click", (ev) => {
     const t = ev.target as HTMLElement;
-    const b = t.closest<HTMLElement>("[data-details],[data-restore],[data-export],[data-close]");
+    const b = t.closest<HTMLElement>("[data-details],[data-restore],[data-export],[data-delete],[data-close]");
     if (!b) return;
     if (b.dataset.details) showDetails(b.dataset.details);
     else if (b.dataset.restore) askRestore(b.dataset.restore);
     else if (b.dataset.export) askExport(b.dataset.export);
+    else if (b.dataset.delete) askDelete(b.dataset.delete, b.dataset.when ?? b.dataset.delete);
     else if (b.hasAttribute("data-close")) b.closest("dialog")?.close();
   });
   $<HTMLDialogElement>("busy").addEventListener("cancel", (e) => busy && e.preventDefault());

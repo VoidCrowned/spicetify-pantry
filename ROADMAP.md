@@ -21,7 +21,8 @@
 
 ## 3 – Export & UI fine-tuning
 - [x] Export and import profiles (#32)
-- [ ] UI fine-tuning: layout, wording and colours (#33)
+- [x] UI fine-tuning: layout, wording and colours (#33)
+- [x] Delete profiles (#38)
 - [ ] New app icon (#34)
 
 ## Future
@@ -33,3 +34,4 @@
 - Code signing (#28)
 - Rename to Spicetify-Pantry (#30)
 - Install Spicetify when it's missing (#36)
+- Self-updating Spicetify-Pantry (#39)

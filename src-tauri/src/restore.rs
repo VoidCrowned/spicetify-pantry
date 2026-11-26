@@ -276,14 +276,14 @@ pub fn restore(roots: &Roots, dir: &Path, id: &str, o: &Options, progress: Progr
     }
     r.step("Version check", true, if c.warnings.is_empty() { "Versions match.".to_string() } else { format!("Continued despite: {}", c.warnings.join(" ")) });
 
-    progress("Capturing the current state first…");
+    progress("Backing up your current setup first…");
     match capture::capture(roots, dir, "before-restore", progress) {
         Ok((b, _)) => {
             r.backup_id = Some(b.id.clone());
-            r.step("Automatic capture", true, format!("Saved as {}.", b.id));
+            r.step("Automatic backup", true, format!("Saved as {}.", b.id));
         }
         Err(e) => {
-            r.step("Automatic capture", false, format!("{e} Nothing was changed."));
+            r.step("Automatic backup", false, format!("{e} Nothing was changed."));
             return r;
         }
     }
