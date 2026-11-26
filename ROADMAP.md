@@ -24,6 +24,7 @@
 - [x] UI fine-tuning: layout, wording and colours (#33)
 - [x] Delete profiles (#38)
 - [x] Details dialog: fixed header, scrolling list (#41)
+- [x] Close Spotify for me via Ctrl+Shift+Q (#43)
 - [ ] New app icon (#34)
 
 ## Future

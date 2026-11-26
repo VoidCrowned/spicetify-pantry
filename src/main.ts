@@ -50,9 +50,32 @@ async function refreshStatus() {
     el.innerHTML = parts.join(" · ");
     const open = s.spotifyState === "runningWithoutPort";
     $("banner").hidden = !open;
+    if (!open) $("banner-error").hidden = true;
     $<HTMLButtonElement>("capture").disabled = open;
   } catch (e) {
     el.textContent = String(e);
+  }
+}
+
+let closing = false;
+async function closeSpotify() {
+  if (closing || busy) return;
+  closing = true;
+  const btn = $<HTMLButtonElement>("close-spotify");
+  const err = $("banner-error");
+  btn.disabled = true;
+  btn.textContent = "Closing…";
+  err.hidden = true;
+  try {
+    await invoke("close_spotify");
+  } catch (e) {
+    err.textContent = String(e);
+    err.hidden = false;
+  } finally {
+    closing = false;
+    btn.disabled = false;
+    btn.textContent = "Close Spotify for me";
+    refreshStatus();
   }
 }
 
@@ -255,6 +278,7 @@ window.addEventListener("DOMContentLoaded", () => {
   $("import").addEventListener("click", importProfile);
   $("export-go").addEventListener("click", exportProfile);
   $("delete-go").addEventListener("click", deleteProfile);
+  $("close-spotify").addEventListener("click", closeSpotify);
   document.addEventListener("click", (ev) => {
     const t = ev.target as HTMLElement;
     const b = t.closest<HTMLElement>("[data-details],[data-restore],[data-export],[data-delete],[data-close]");

@@ -19,7 +19,7 @@ Needs the regular Spotify installer (not the Microsoft Store version) and Spicet
 
 From WSL: `npm install`, then `npm run build:win` builds the Windows installer with cargo-xwin. Tests run as Windows binaries: `CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUNNER=$PWD/scripts/win-runner.sh cargo xwin test --target x86_64-pc-windows-msvc` in `src-tauri`.
 
-`pantry.exe --cli self-test <out.json>` runs the self-test without the window (also `capture`, `list`, `restore <id>`, `export <id> <file> [--share]`, `import <file>`, `delete <id>`).
+`pantry.exe --cli self-test <out.json>` runs the self-test without the window (also `capture`, `list`, `restore <id>`, `export <id> <file> [--share]`, `import <file>`, `delete <id>`, `close-spotify`).
 
 Status: early development. See [ROADMAP.md](ROADMAP.md).
 
