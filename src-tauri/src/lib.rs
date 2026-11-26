@@ -174,6 +174,12 @@ async fn import_profile(path: PathBuf) -> Result<transfer::Imported, String> {
 }
 
 #[tauri::command]
+async fn delete_profile(id: String) -> Result<(), String> {
+    let r = roots()?;
+    blocking(move || profile::delete(&profiles_dir(&r), &id)).await?
+}
+
+#[tauri::command]
 async fn self_test(app: AppHandle) -> Result<selftest::SelfTest, String> {
     let r = roots()?;
     blocking(move || selftest::run(&r, &profiles_dir(&r), &progress(&app))).await
@@ -189,11 +195,11 @@ async fn open_profiles_folder(app: AppHandle) -> Result<(), String> {
 
 /// Headless mode for automated checks: `pantry.exe --cli <command> [args] <out.json>`.
 /// Commands: `self-test`, `capture`, `list`, `restore <id> [--include-spotify] [--acknowledge]`,
-/// `export <id> <file> [--share]`, `import <file>`.
+/// `export <id> <file> [--share]`, `import <file>`, `delete <id>`.
 /// The release build has no console, so results go to the JSON file; progress lines go to `<out.json>.log`.
 pub fn cli(args: &[String]) -> i32 {
     let Some(out) = args.last().filter(|a| a.ends_with(".json")) else {
-        eprintln!("usage: pantry --cli <self-test|capture|list|restore <id>|export <id> <file>|import <file>> <out.json>");
+        eprintln!("usage: pantry --cli <self-test|capture|list|restore <id>|export <id> <file>|import <file>|delete <id>> <out.json>");
         return 2;
     };
     let log = std::sync::Mutex::new(std::fs::File::create(format!("{out}.log")).ok());
@@ -234,6 +240,10 @@ pub fn cli(args: &[String]) -> i32 {
             Ok(i) => (0, serde_json::to_value(i).unwrap()),
             Err(e) => (1, serde_json::json!({ "error": e })),
         },
+        "delete" if args.len() >= 3 => match profile::delete(&dir, &args[1]) {
+            Ok(()) => (0, serde_json::json!({ "deleted": args[1] })),
+            Err(e) => (1, serde_json::json!({ "error": e })),
+        },
         other => (2, serde_json::json!({ "error": format!("unknown command {other}") })),
     };
     let _ = std::fs::write(out, serde_json::to_string_pretty(&v).unwrap());
@@ -246,7 +256,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![status, list_profiles, profile_details, capture, restore_check, restore, self_test, open_profiles_folder, export_profile, import_profile])
+        .invoke_handler(tauri::generate_handler![status, list_profiles, profile_details, capture, restore_check, restore, self_test, open_profiles_folder, export_profile, import_profile, delete_profile])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -243,6 +243,18 @@ pub fn path_of(dir: &Path, id: &str) -> std::io::Result<PathBuf> {
     }
 }
 
+/// Deletes profile `id` from `dir`: to the Recycle Bin, so a mis-click can be undone (permanently in unit tests).
+pub fn delete(dir: &Path, id: &str) -> Result<(), String> {
+    let p = path_of(dir, id).map_err(|e| e.to_string())?;
+    if !p.is_file() {
+        return Err(format!("There's no profile {id}."));
+    }
+    #[cfg(not(test))]
+    return trash::delete(&p).map_err(|e| format!("couldn't move {id} to the Recycle Bin: {e}"));
+    #[cfg(test)]
+    return std::fs::remove_file(&p).map_err(|e| e.to_string());
+}
+
 pub fn new_id(now: chrono::DateTime<chrono::Utc>) -> String {
     now.format("%Y-%m-%dT%H-%M-%SZ").to_string()
 }
@@ -313,6 +325,17 @@ mod tests {
             assert!(!valid_id(bad), "{bad}");
         }
         assert!(path_of(Path::new("d"), "../x").is_err());
+    }
+
+    #[test]
+    fn delete_removes_only_valid_existing_profiles() {
+        let t = tempfile::tempdir().unwrap();
+        let p = sample();
+        p.save(t.path()).unwrap();
+        assert!(delete(t.path(), "../x").is_err());
+        assert!(delete(t.path(), "2026-01-01T00-00-00Z").unwrap_err().contains("no profile"));
+        delete(t.path(), &p.id).unwrap();
+        assert!(list(t.path()).is_empty());
     }
 
     #[test]
