@@ -22,5 +22,4 @@ From WSL: `npm install`, then `npm run build:win` builds the Windows installer w
 Status: early development. See [ROADMAP.md](ROADMAP.md).
 
 ## Licence
-
-[WTFPL](LICENSE)
+Copyright © 2026 VoidCrowned. This program is free software. It comes without any warranty, to the extent permitted by applicable law. You can redistribute it and/or modify it under the terms of the Do What The Fuck You Want To Public License, Version 2, as published by Sam Hocevar. See [LICENSE](LICENSE) or http://www.wtfpl.net/ for more details.
