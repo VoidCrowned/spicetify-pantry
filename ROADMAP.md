@@ -19,6 +19,11 @@
 - [x] Self-test (#14)
 - [x] Packaging: NSIS test builds (#15)
 
+## 3 – Export & UI fine-tuning
+- [x] Export and import profiles (#32)
+- [ ] UI fine-tuning: layout, wording and colours (#33)
+- [ ] New app icon (#34)
+
 ## Future
 - Linux and macOS support (#16)
 - Snapshot-diff key attribution (#17)
@@ -26,3 +31,5 @@
 - Live sync via an optional companion extension (#19)
 - Version manager (#20)
 - Code signing (#28)
+- Rename to Spicetify-Pantry (#30)
+- Install Spicetify when it's missing (#36)

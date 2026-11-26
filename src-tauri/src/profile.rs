@@ -34,6 +34,12 @@ pub struct Profile {
     /// Keys no extension claimed. Restored by default, because they're most likely extension settings.
     pub unassigned: Vec<String>,
     pub notes: Vec<String>,
+    /// When this profile was imported from a file (#32); `None` for profiles captured on this PC.
+    #[serde(default)]
+    pub imported_at: Option<String>,
+    /// Exported "for sharing": no Spotify keys, account hash or raw ini.
+    #[serde(default)]
+    pub shared: bool,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
@@ -148,6 +154,19 @@ impl Profile {
         Ok(v)
     }
 
+    /// A copy for other people: without Spotify's own keys, the account hash and the raw ini (it holds Windows paths).
+    /// Everything Restore writes by default stays.
+    pub fn for_sharing(&self) -> Profile {
+        let mut p = self.clone();
+        for k in std::mem::take(&mut p.spotify_keys) {
+            p.storage.local_storage.remove(&k);
+        }
+        p.account_hash = None;
+        p.ini.raw.clear();
+        p.shared = true;
+        p
+    }
+
     /// Every localStorage key belongs to at least one group.
     pub fn ungrouped_keys(&self) -> Vec<&String> {
         self.storage
@@ -177,6 +196,8 @@ pub struct Summary {
     pub keys: usize,
     pub unassigned: usize,
     pub bytes: u64,
+    pub imported_at: Option<String>,
+    pub shared: bool,
 }
 
 pub fn list(dir: &Path) -> Vec<Summary> {
@@ -192,6 +213,8 @@ pub fn list(dir: &Path) -> Vec<Summary> {
                 keys: p.storage.local_storage.len() + p.storage.indexed_db.values().flat_map(|d| d.stores.values()).map(|s| s.records.len()).sum::<usize>(),
                 unassigned: p.unassigned.len(),
                 bytes: e.metadata().map(|m| m.len()).unwrap_or(0),
+                imported_at: p.imported_at,
+                shared: p.shared,
                 id: p.id,
                 created_at: p.created_at,
                 reason: p.reason,
@@ -203,6 +226,21 @@ pub fn list(dir: &Path) -> Vec<Summary> {
         .collect();
     out.sort_by(|a, b| b.id.cmp(&a.id));
     out
+}
+
+/// Profile ids are file names: a timestamp from `new_id`, optionally with `-2`, `-3`… after an import clash.
+pub fn valid_id(id: &str) -> bool {
+    static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    RE.get_or_init(|| regex::Regex::new(r"^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z(-\d{1,4})?$").unwrap()).is_match(id)
+}
+
+/// The path of a profile in `dir`, or an error for an id that isn't a valid file name.
+pub fn path_of(dir: &Path, id: &str) -> std::io::Result<PathBuf> {
+    if valid_id(id) {
+        Ok(dir.join(format!("{id}.json")))
+    } else {
+        Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("not a profile id: {id:?}")))
+    }
 }
 
 pub fn new_id(now: chrono::DateTime<chrono::Utc>) -> String {
@@ -243,6 +281,38 @@ mod tests {
         assert!(p.ungrouped_keys().is_empty());
         p.storage.local_storage.insert("lost".into(), "1".into());
         assert_eq!(p.ungrouped_keys(), vec!["lost"]);
+    }
+
+    #[test]
+    fn sharing_copy_leaves_out_private_data() {
+        let mut p = sample();
+        p.account_hash = Some("abc".into());
+        p.ini.raw = "prefs_path = C:\\Users\\VC\\AppData\\Roaming\\Spotify\\prefs".into();
+        p.ini.current_theme = "Hazy".into();
+        let s = p.for_sharing();
+        assert!(s.shared && s.account_hash.is_none() && s.ini.raw.is_empty() && s.spotify_keys.is_empty());
+        assert!(!s.storage.local_storage.contains_key("ES|x"));
+        assert!(s.storage.local_storage.contains_key("gpb:settings") && s.storage.local_storage.contains_key("mystery"));
+        assert_eq!(s.ini.current_theme, "Hazy");
+        assert!(s.ungrouped_keys().is_empty());
+    }
+
+    #[test]
+    fn old_profiles_without_new_fields_load() {
+        let mut v = serde_json::to_value(sample()).unwrap();
+        v.as_object_mut().unwrap().remove("importedAt");
+        v.as_object_mut().unwrap().remove("shared");
+        let p: Profile = serde_json::from_value(v).unwrap();
+        assert!(p.imported_at.is_none() && !p.shared);
+    }
+
+    #[test]
+    fn ids_are_checked() {
+        assert!(valid_id("2026-11-25T22-59-04Z") && valid_id("2026-11-25T22-59-04Z-2"));
+        for bad in ["../x", "2026-11-25T22-59-04Z/../../a", "", "2026-11-25T22-59-04Z.json", "a\\b"] {
+            assert!(!valid_id(bad), "{bad}");
+        }
+        assert!(path_of(Path::new("d"), "../x").is_err());
     }
 
     #[test]

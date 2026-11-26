@@ -32,6 +32,7 @@
       <button id="selftest" class="quiet">Run self-test</button>
       <span id="selftest-result" class="muted"></span>
       <span class="spacer"></span>
+      <button id="import" class="quiet">Import profile…</button>
       <button id="open-folder" class="quiet">Open profiles folder</button>
     </footer>
 
@@ -51,6 +52,17 @@
       <div class="actions">
         <button class="quiet" data-close>Cancel</button>
         <button id="confirm-go">Restore</button>
+      </div>
+    </dialog>
+
+    <dialog id="export">
+      <h2>Export this profile</h2>
+      <p>Saves the profile as one file. Copy it to another PC and use <strong>Import profile…</strong> there, then Restore.</p>
+      <p class="muted">Your extensions, theme and all their settings are always included. Some extensions keep API tokens in their settings, so only share with people you trust.</p>
+      <label class="check"><input type="checkbox" id="export-share" /> For sharing with others: leave out Spotify's own settings, your account ID (hashed) and your Windows folder paths.</label>
+      <div class="actions">
+        <button class="quiet" data-close>Cancel</button>
+        <button id="export-go">Choose where to save…</button>
       </div>
     </dialog>
 

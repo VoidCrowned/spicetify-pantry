@@ -255,7 +255,7 @@ fn reload_and_wait() -> Result<(), String> {
 
 pub fn restore(roots: &Roots, dir: &Path, id: &str, o: &Options, progress: Progress) -> Report {
     let mut r = Report::default();
-    let p = match Profile::load(&dir.join(format!("{id}.json"))) {
+    let p = match path_of(dir, id).and_then(|f| Profile::load(&f)) {
         Ok(p) => p,
         Err(e) => {
             r.step("Load profile", false, e.to_string());

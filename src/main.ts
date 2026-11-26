@@ -1,13 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { open, save } from "@tauri-apps/plugin-dialog";
 
 type Versions = { spotify: string | null; spicetify: string | null; marketplace: string | null };
 type Theme = { name: string | null; colourScheme: string | null; source: string };
 type Summary = {
   id: string; createdAt: string; reason: string; source: string; versions: Versions; theme: Theme;
-  extensions: number; keys: number; unassigned: number; bytes: number;
+  extensions: number; keys: number; unassigned: number; bytes: number; importedAt: string | null; shared: boolean;
 };
+type Imported = { id: string; alreadyThere: boolean; extensions: number; theme: string | null; colourScheme: string | null; shared: boolean };
 type KeyInfo = { key: string; size: number };
 type ExtensionDetails = {
   id: string; name: string; kind: string; source: string | null; keys: string[]; databases: string[];
@@ -65,11 +67,12 @@ async function refreshProfiles() {
     .map(
       (p) => `<article class="profile">
         <div class="info">
-          <h3>${when(p.createdAt)} ${p.reason === "before-restore" ? `<span class="badge">automatic, before a restore</span>` : ""}${p.source === "leveldb" ? `<span class="badge warn">read with Spotify closed</span>` : ""}</h3>
+          <h3>${when(p.createdAt)} ${p.reason === "before-restore" ? `<span class="badge">automatic, before a restore</span>` : ""}${p.source === "leveldb" ? `<span class="badge warn">read with Spotify closed</span>` : ""}${p.importedAt ? `<span class="badge">imported ${when(p.importedAt)}</span>` : ""}${p.shared ? `<span class="badge">shared copy</span>` : ""}</h3>
           <p class="muted">${p.extensions} extensions · ${p.theme.name ? `${esc(p.theme.name)}${p.theme.colourScheme ? ` (${esc(p.theme.colourScheme)})` : ""}` : "no theme"} · ${p.keys} settings${p.unassigned ? ` (${p.unassigned} unassigned)` : ""} · Spotify ${short(p.versions.spotify)}, Spicetify ${esc(p.versions.spicetify ?? "?")} · ${size(p.bytes)}</p>
         </div>
         <div class="buttons">
           <button class="quiet" data-details="${esc(p.id)}">Details</button>
+          <button class="quiet" data-export="${esc(p.id)}">Export</button>
           <button data-restore="${esc(p.id)}">Restore</button>
         </div>
       </article>`,
@@ -159,6 +162,47 @@ async function restore() {
   }
 }
 
+let exporting: string | null = null;
+function askExport(id: string) {
+  if (busy) return;
+  exporting = id;
+  $<HTMLInputElement>("export-share").checked = false;
+  $<HTMLDialogElement>("export").showModal();
+}
+
+async function exportProfile() {
+  const id = exporting;
+  if (!id) return;
+  const share = $<HTMLInputElement>("export-share").checked;
+  const path = await save({ defaultPath: `spicetify-pantry-${id}${share ? "-shared" : ""}.json`, filters: [{ name: "Pantry profile", extensions: ["json"] }] });
+  if (!path) return;
+  $<HTMLDialogElement>("export").close();
+  startBusy("Exporting");
+  try {
+    await invoke("export_profile", { id, path, share });
+    endBusy([{ name: "Saved", ok: true, detail: `${path}${share ? " (for sharing)" : ""}` }], "Done.");
+  } catch (e) {
+    endBusy([{ name: "Export", ok: false, detail: String(e) }], "Nothing was saved.");
+  }
+}
+
+async function importProfile() {
+  if (busy) return;
+  const path = await open({ multiple: false, directory: false, filters: [{ name: "Pantry profile", extensions: ["json"] }] });
+  if (!path) return;
+  startBusy("Importing");
+  try {
+    const i = await invoke<Imported>("import_profile", { path });
+    const theme = i.theme ? `${i.theme}${i.colourScheme ? ` (${i.colourScheme})` : ""}` : "no theme";
+    endBusy(
+      [{ name: i.alreadyThere ? "Already in your list" : "Imported", ok: true, detail: `${i.extensions} extensions, ${theme}${i.shared ? ", shared copy" : ""}.` }],
+      i.alreadyThere ? "Nothing new to add." : "Done. Press Restore on it to set up this PC the same way.",
+    );
+  } catch (e) {
+    endBusy([{ name: "Import", ok: false, detail: String(e) }], "Nothing was added.");
+  }
+}
+
 async function selfTest() {
   if (busy) return;
   const out = $("selftest-result");
@@ -185,12 +229,15 @@ window.addEventListener("DOMContentLoaded", () => {
   $("confirm-go").addEventListener("click", restore);
   $("selftest").addEventListener("click", selfTest);
   $("open-folder").addEventListener("click", () => invoke("open_profiles_folder"));
+  $("import").addEventListener("click", importProfile);
+  $("export-go").addEventListener("click", exportProfile);
   document.addEventListener("click", (ev) => {
     const t = ev.target as HTMLElement;
-    const b = t.closest<HTMLElement>("[data-details],[data-restore],[data-close]");
+    const b = t.closest<HTMLElement>("[data-details],[data-restore],[data-export],[data-close]");
     if (!b) return;
     if (b.dataset.details) showDetails(b.dataset.details);
     else if (b.dataset.restore) askRestore(b.dataset.restore);
+    else if (b.dataset.export) askExport(b.dataset.export);
     else if (b.hasAttribute("data-close")) b.closest("dialog")?.close();
   });
   $<HTMLDialogElement>("busy").addEventListener("cancel", (e) => busy && e.preventDefault());
