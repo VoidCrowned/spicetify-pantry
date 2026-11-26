@@ -6,6 +6,7 @@ pub mod ini;
 pub mod js;
 pub mod leveldb;
 pub mod profile;
+pub mod quit;
 pub mod restore;
 pub mod selftest;
 pub mod spotify;
@@ -179,6 +180,21 @@ async fn delete_profile(id: String) -> Result<(), String> {
     blocking(move || profile::delete(&profiles_dir(&r), &id)).await?
 }
 
+/// Closes Spotify the clean way: over CDP when Pantry is connected, else with its own Ctrl+Shift+Q.
+fn close_spotify_now() -> Result<(), String> {
+    if cdp::port_open(cdp::PORT) {
+        spotify::close(std::time::Duration::from_secs(30))
+    } else {
+        let exe = roots().ok().and_then(|r| detect::detect(&r).spotify.map(|s| s.exe));
+        quit::quit_spotify(exe.as_deref(), std::time::Duration::from_secs(15)).map_err(|e| e.to_string())
+    }
+}
+
+#[tauri::command]
+async fn close_spotify() -> Result<(), String> {
+    blocking(close_spotify_now).await?
+}
+
 #[tauri::command]
 async fn self_test(app: AppHandle) -> Result<selftest::SelfTest, String> {
     let r = roots()?;
@@ -195,11 +211,11 @@ async fn open_profiles_folder(app: AppHandle) -> Result<(), String> {
 
 /// Headless mode for automated checks: `pantry.exe --cli <command> [args] <out.json>`.
 /// Commands: `self-test`, `capture`, `list`, `restore <id> [--include-spotify] [--acknowledge]`,
-/// `export <id> <file> [--share]`, `import <file>`, `delete <id>`.
+/// `export <id> <file> [--share]`, `import <file>`, `delete <id>`, `close-spotify`.
 /// The release build has no console, so results go to the JSON file; progress lines go to `<out.json>.log`.
 pub fn cli(args: &[String]) -> i32 {
     let Some(out) = args.last().filter(|a| a.ends_with(".json")) else {
-        eprintln!("usage: pantry --cli <self-test|capture|list|restore <id>|export <id> <file>|import <file>|delete <id>> <out.json>");
+        eprintln!("usage: pantry --cli <self-test|capture|list|restore <id>|export <id> <file>|import <file>|delete <id>|close-spotify> <out.json>");
         return 2;
     };
     let log = std::sync::Mutex::new(std::fs::File::create(format!("{out}.log")).ok());
@@ -244,6 +260,10 @@ pub fn cli(args: &[String]) -> i32 {
             Ok(()) => (0, serde_json::json!({ "deleted": args[1] })),
             Err(e) => (1, serde_json::json!({ "error": e })),
         },
+        "close-spotify" => match close_spotify_now() {
+            Ok(()) => (0, serde_json::json!({ "closed": true })),
+            Err(e) => (1, serde_json::json!({ "closed": false, "error": e })),
+        },
         other => (2, serde_json::json!({ "error": format!("unknown command {other}") })),
     };
     let _ = std::fs::write(out, serde_json::to_string_pretty(&v).unwrap());
@@ -256,7 +276,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![status, list_profiles, profile_details, capture, restore_check, restore, self_test, open_profiles_folder, export_profile, import_profile, delete_profile])
+        .invoke_handler(tauri::generate_handler![status, list_profiles, profile_details, capture, restore_check, restore, self_test, open_profiles_folder, export_profile, import_profile, delete_profile, close_spotify])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -2744,7 +2744,7 @@ dependencies = [
 
 [[package]]
 name = "pantry"
-version = "0.3.1"
+version = "0.3.3"
 dependencies = [
  "base64 0.23.1",
  "chrono",
@@ -2762,6 +2762,7 @@ dependencies = [
  "trash",
  "tungstenite",
  "ureq",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
