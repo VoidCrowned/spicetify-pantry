@@ -79,6 +79,14 @@ dialog { background: var(--panel); color: var(--text); border: 1px solid var(--o
 dialog::backdrop { background: rgba(5, 6, 14, 0.7); }
 dialog h2 { margin-top: 0; }
 .dialog-head { display: flex; justify-content: space-between; align-items: center; }
+/* Details: the head stays, only the list scrolls */
+dialog#details[open] { display: flex; flex-direction: column; height: 86vh; padding-right: 0; }
+dialog#details .dialog-head, dialog#details .details-top { margin-right: 24px; flex-shrink: 0; }
+.details-top { padding-bottom: var(--gap); border-bottom: 1px solid var(--outline); }
+.details-top h3 { margin-top: 10px; }
+.details-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: var(--gap) 24px 0 0; }
+.details-scroll > details.ext:first-child { border-top: 0; }
+.notes-head { margin-top: var(--gap); }
 .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 .warnings { padding-left: 18px; color: var(--disconnected); }
 .warnings .fail, .steps .fail { color: var(--bad); }
