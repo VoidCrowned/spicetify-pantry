@@ -23,6 +23,7 @@
 - [x] Export and import profiles (#32)
 - [x] UI fine-tuning: layout, wording and colours (#33)
 - [x] Delete profiles (#38)
+- [x] Details dialog: fixed header, scrolling list (#41)
 - [ ] New app icon (#34)
 
 ## Future

@@ -100,12 +100,13 @@ async function showDetails(id: string) {
       </details>`,
     )
     .join("");
+  $("details-meta").innerHTML = `Spotify ${esc(d.versions.spotify ?? "?")} · Spicetify ${esc(d.versions.spicetify ?? "?")}${d.versions.marketplace ? ` · Marketplace ${esc(d.versions.marketplace)} (${d.marketplace.storage === "indexeddb" ? "IndexedDB" : d.marketplace.storage}, ${d.marketplace.keys.length} entries)` : ""}`;
   $("details-body").innerHTML = `
-    <p class="muted">Spotify ${esc(d.versions.spotify ?? "?")} · Spicetify ${esc(d.versions.spicetify ?? "?")}${d.versions.marketplace ? ` · Marketplace ${esc(d.versions.marketplace)} (${d.marketplace.storage === "indexeddb" ? "IndexedDB" : d.marketplace.storage}, ${d.marketplace.keys.length} entries)` : ""}</p>
-    ${d.notes.length ? `<ul class="warnings">${d.notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}
-    <h3>Extensions and theme</h3>${exts || `<p class="muted">None.</p>`}
+    ${exts || `<p class="muted">None.</p>`}
     <details class="ext"><summary><strong>Unassigned</strong> <span class="muted">${d.unassigned.length} settings no extension claimed – restored too</span></summary>${keyTable(d.unassigned)}</details>
-    <details class="ext"><summary><strong>Spotify's own</strong> <span class="muted">${d.spotifyKeys.length} settings – kept, not restored unless you choose to</span></summary>${keyTable(d.spotifyKeys)}</details>`;
+    <details class="ext"><summary><strong>Spotify's own</strong> <span class="muted">${d.spotifyKeys.length} settings – kept, not restored unless you choose to</span></summary>${keyTable(d.spotifyKeys)}</details>
+    ${d.notes.length ? `<h3 class="notes-head">Notes</h3><ul class="warnings">${d.notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}`;
+  $("details-body").scrollTop = 0;
   $<HTMLDialogElement>("details").showModal();
 }
 
