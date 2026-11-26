@@ -326,6 +326,8 @@ pub fn build(det: &Detection, live: Live, spicetify_version: Option<String>, sou
         spotify_keys,
         unassigned,
         notes,
+        imported_at: None,
+        shared: false,
     }
 }
 

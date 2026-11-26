@@ -5,7 +5,7 @@ use crate::capture::{self, Progress};
 use crate::detect::{self, Roots};
 use crate::profile::{self, Profile};
 use crate::restore::{self, Options};
-use crate::{cdp, js, spotify};
+use crate::{cdp, js, spotify, transfer};
 use serde::Serialize;
 use std::path::Path;
 
@@ -70,6 +70,27 @@ pub fn run(roots: &Roots, dir: &Path, progress: Progress) -> SelfTest {
     p.storage.local_storage.insert("k".into(), "v ✓".into());
     p.files.insert("Extensions/a.js".into(), capture::file_entry(b"a"));
     t.add("Profile save and load round trip", p.save(&tmp).and_then(|f| Profile::load(&f)).map_err(|e| e.to_string()).and_then(|q| ok_if(q == p, "identical", "differs after loading")));
+    let _ = std::fs::remove_dir_all(&tmp);
+    let (a, b) = (tmp.join("a"), tmp.join("b"));
+    let mut q = Profile { format: profile::FORMAT, id: "2026-01-01T00-00-00Z".into(), account_hash: Some("h".into()), ..Default::default() };
+    q.storage.local_storage.insert("ext:setting".into(), "1".into());
+    q.storage.local_storage.insert("spotify:own".into(), "1".into());
+    q.spotify_keys.push("spotify:own".into());
+    q.ini.raw = "prefs_path = C:\\Users\\someone".into();
+    let file = tmp.join("export.json");
+    t.add(
+        "Export and import round trip",
+        q.save(&a).map_err(|e| e.to_string()).and_then(|_| transfer::export(&a, &q.id, &file, false)).and_then(|_| transfer::import(&b, &file, chrono::Utc::now())).and_then(|i| {
+            let back = Profile::load(&b.join(format!("{}.json", i.id))).map_err(|e| e.to_string())?;
+            ok_if(!i.already_there && Profile { imported_at: None, ..back } == q, "identical after import", "differs after import")
+        }),
+    );
+    t.add(
+        "Shared export leaves out private data",
+        transfer::export(&a, &q.id, &file, true).and_then(|_| std::fs::read_to_string(&file).map_err(|e| e.to_string())).and_then(|text| {
+            ok_if(!text.contains("spotify:own") && !text.contains("someone") && !text.contains("\"h\"") && text.contains("ext:setting"), "no Spotify keys, account hash or paths", "private data in the shared file")
+        }),
+    );
     let _ = std::fs::remove_dir_all(&tmp);
     t.add("SHA-256", ok_if(capture::sha256_hex(b"abc") == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", "known vector matches", "wrong digest"));
 

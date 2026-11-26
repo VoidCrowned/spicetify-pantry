@@ -9,6 +9,7 @@ pub mod profile;
 pub mod restore;
 pub mod selftest;
 pub mod spotify;
+pub mod transfer;
 
 use serde::Serialize;
 use std::path::PathBuf;
@@ -97,7 +98,7 @@ struct Details {
 async fn profile_details(id: String) -> Result<Details, String> {
     let r = roots()?;
     blocking(move || {
-        let p = profile::Profile::load(&profiles_dir(&r).join(format!("{id}.json"))).map_err(|e| e.to_string())?;
+        let p = profile::path_of(&profiles_dir(&r), &id).and_then(|f| profile::Profile::load(&f)).map_err(|e| e.to_string())?;
         let info = |keys: &[String]| keys.iter().map(|k| KeyInfo { key: k.clone(), size: p.storage.local_storage.get(k).map(String::len).unwrap_or(0) }).collect::<Vec<_>>();
         let extensions = p
             .extensions
@@ -146,7 +147,7 @@ async fn capture(app: AppHandle) -> Result<profile::Summary, String> {
 async fn restore_check(id: String) -> Result<restore::Check, String> {
     let r = roots()?;
     blocking(move || {
-        let p = profile::Profile::load(&profiles_dir(&r).join(format!("{id}.json"))).map_err(|e| e.to_string())?;
+        let p = profile::path_of(&profiles_dir(&r), &id).and_then(|f| profile::Profile::load(&f)).map_err(|e| e.to_string())?;
         let det = detect::detect(&r);
         let now = det.spicetify.as_ref().and_then(|s| s.exe.as_ref()).and_then(|e| spotify::spicetify_version(e));
         Ok(restore::check(&p, &det, now.as_deref()))
@@ -158,6 +159,18 @@ async fn restore_check(id: String) -> Result<restore::Check, String> {
 async fn restore(app: AppHandle, id: String, options: restore::Options) -> Result<restore::Report, String> {
     let r = roots()?;
     blocking(move || restore::restore(&r, &profiles_dir(&r), &id, &options, &progress(&app))).await
+}
+
+#[tauri::command]
+async fn export_profile(id: String, path: PathBuf, share: bool) -> Result<(), String> {
+    let r = roots()?;
+    blocking(move || transfer::export(&profiles_dir(&r), &id, &path, share).map(|_| ())).await?
+}
+
+#[tauri::command]
+async fn import_profile(path: PathBuf) -> Result<transfer::Imported, String> {
+    let r = roots()?;
+    blocking(move || transfer::import(&profiles_dir(&r), &path, chrono::Utc::now())).await?
 }
 
 #[tauri::command]
@@ -175,11 +188,12 @@ async fn open_profiles_folder(app: AppHandle) -> Result<(), String> {
 }
 
 /// Headless mode for automated checks: `pantry.exe --cli <command> [args] <out.json>`.
-/// Commands: `self-test`, `capture`, `list`, `restore <id> [--include-spotify] [--acknowledge]`.
+/// Commands: `self-test`, `capture`, `list`, `restore <id> [--include-spotify] [--acknowledge]`,
+/// `export <id> <file> [--share]`, `import <file>`.
 /// The release build has no console, so results go to the JSON file; progress lines go to `<out.json>.log`.
 pub fn cli(args: &[String]) -> i32 {
     let Some(out) = args.last().filter(|a| a.ends_with(".json")) else {
-        eprintln!("usage: pantry --cli <self-test|capture|list|restore <id>> <out.json>");
+        eprintln!("usage: pantry --cli <self-test|capture|list|restore <id>|export <id> <file>|import <file>> <out.json>");
         return 2;
     };
     let log = std::sync::Mutex::new(std::fs::File::create(format!("{out}.log")).ok());
@@ -212,6 +226,14 @@ pub fn cli(args: &[String]) -> i32 {
             let rep = restore::restore(&r, &dir, &args[1], &o, &progress);
             (if rep.ok { 0 } else { 1 }, serde_json::to_value(rep).unwrap())
         }
+        "export" if args.len() >= 4 => match transfer::export(&dir, &args[1], std::path::Path::new(&args[2]), args.iter().any(|a| a == "--share")) {
+            Ok(p) => (0, serde_json::json!({ "id": p.id, "file": args[2], "shared": p.shared })),
+            Err(e) => (1, serde_json::json!({ "error": e })),
+        },
+        "import" if args.len() >= 3 => match transfer::import(&dir, std::path::Path::new(&args[1]), chrono::Utc::now()) {
+            Ok(i) => (0, serde_json::to_value(i).unwrap()),
+            Err(e) => (1, serde_json::json!({ "error": e })),
+        },
         other => (2, serde_json::json!({ "error": format!("unknown command {other}") })),
     };
     let _ = std::fs::write(out, serde_json::to_string_pretty(&v).unwrap());
@@ -223,7 +245,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
-        .invoke_handler(tauri::generate_handler![status, list_profiles, profile_details, capture, restore_check, restore, self_test, open_profiles_folder])
+        .plugin(tauri_plugin_dialog::init())
+        .invoke_handler(tauri::generate_handler![status, list_profiles, profile_details, capture, restore_check, restore, self_test, open_profiles_folder, export_profile, import_profile])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
