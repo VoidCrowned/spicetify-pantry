@@ -27,8 +27,9 @@ impl std::fmt::Display for Refused {
     }
 }
 
+/// `exe` is Spotify.exe: starting it again while Spotify runs makes Spotify show its own window (from the tray too).
 #[cfg(windows)]
-pub fn quit_spotify(timeout: Duration) -> Result<(), Refused> {
+pub fn quit_spotify(exe: Option<&std::path::Path>, timeout: Duration) -> Result<(), Refused> {
     use std::time::Instant;
     use windows_sys::Win32::System::Threading::GetCurrentProcessId;
     use windows_sys::Win32::UI::WindowsAndMessaging::*;
@@ -41,16 +42,36 @@ pub fn quit_spotify(timeout: Duration) -> Result<(), Refused> {
         if fg.is_null() || win::pid_of(fg) != GetCurrentProcessId() {
             return Err(Refused::NotActive);
         }
-        let Some(h) = win::spotify_window() else { return Err(Refused::NoWindow) };
-        let was_hidden = IsWindowVisible(h) == 0;
+        let Some(mut h) = win::spotify_window() else { return Err(Refused::NoWindow) };
+        let mut was_hidden = IsWindowVisible(h) == 0;
         if was_hidden {
-            ShowWindow(h, SW_SHOW);
+            // In the tray: let Spotify bring its own window back, so its page gets keyboard focus.
+            // A window forced visible from outside ignores the shortcut.
+            if let Some(exe) = exe {
+                let _ = std::process::Command::new(exe).spawn();
+                let t0 = Instant::now();
+                while t0.elapsed() < Duration::from_secs(8) {
+                    std::thread::sleep(Duration::from_millis(300));
+                    if let Some(v) = win::spotify_window().filter(|w| IsWindowVisible(*w) != 0) {
+                        h = v;
+                        was_hidden = false;
+                        break;
+                    }
+                }
+            }
+            if was_hidden {
+                ShowWindow(h, SW_SHOW);
+            }
         }
         if IsIconic(h) != 0 {
             ShowWindow(h, SW_RESTORE);
         }
-        SetForegroundWindow(h);
-        std::thread::sleep(Duration::from_millis(300));
+        // Spotify may have taken the foreground itself; Pantry's right to hand it over expires once something else is active.
+        if !win::is_spotify(win::pid_of(GetForegroundWindow())) {
+            SetForegroundWindow(h);
+        }
+        // Give the page time to take keyboard focus after showing or restoring.
+        std::thread::sleep(Duration::from_millis(800));
         // The last check before sending: the active window must be Spotify's.
         let now = GetForegroundWindow();
         if now.is_null() || !win::is_spotify(win::pid_of(now)) {
@@ -72,7 +93,7 @@ pub fn quit_spotify(timeout: Duration) -> Result<(), Refused> {
 }
 
 #[cfg(not(windows))]
-pub fn quit_spotify(_timeout: Duration) -> Result<(), Refused> {
+pub fn quit_spotify(_exe: Option<&std::path::Path>, _timeout: Duration) -> Result<(), Refused> {
     Err(Refused::NoWindow)
 }
 
@@ -163,7 +184,7 @@ mod tests {
     fn refuses_when_pantry_is_not_active() {
         // Under the test runner Pantry has no window, so it's never the active one: nothing is touched.
         if crate::spotify::is_running() {
-            assert_eq!(quit_spotify(Duration::from_secs(1)), Err(Refused::NotActive));
+            assert_eq!(quit_spotify(None, Duration::from_secs(1)), Err(Refused::NotActive));
         }
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "pantry"
-version = "0.3.2"
+version = "0.3.3"
 description = "Backs up and restores Spicetify extensions and their settings"
 authors = ["VoidCrowned"]
 license = "WTFPL"

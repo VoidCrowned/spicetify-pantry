@@ -185,7 +185,8 @@ fn close_spotify_now() -> Result<(), String> {
     if cdp::port_open(cdp::PORT) {
         spotify::close(std::time::Duration::from_secs(30))
     } else {
-        quit::quit_spotify(std::time::Duration::from_secs(15)).map_err(|e| e.to_string())
+        let exe = roots().ok().and_then(|r| detect::detect(&r).spotify.map(|s| s.exe));
+        quit::quit_spotify(exe.as_deref(), std::time::Duration::from_secs(15)).map_err(|e| e.to_string())
     }
 }
 
