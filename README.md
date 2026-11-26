@@ -1,8 +1,10 @@
-# Pantry
+<img src="assets/icon/spicetify-pantry-icon.svg" alt="" width="128">
+
+# Spicetify Pantry
 
 Spicetify forgets. Pantry doesn't.
 
-My Windows app backs up and restores Spicetify extensions **and their settings** from outside Spotify, so nothing is lost when Spotify updates, Spicetify breaks or Spicetify is removed. Spicetify's own backup keeps the extension list, but Marketplace installs and every extension setting live only inside Spotify's browser storage. Pantry backs those up too.
+Spicetify Pantry is my Windows app. It backs up and restores Spicetify extensions **and their settings** from outside Spotify, so nothing is lost when Spotify updates, Spicetify breaks or Spicetify is removed. Spicetify's own backup keeps the extension list, but Marketplace installs and every extension setting live only inside Spotify's browser storage. Pantry backs those up too.
 
 ## What it does
 

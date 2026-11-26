@@ -32,6 +32,8 @@ body { margin: 0; height: 100vh; display: flex; flex-direction: column; overflow
 footer { flex-shrink: 0; display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--outline); }
 
 header { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding-bottom: var(--gap); border-bottom: 1px solid var(--outline); }
+.brand { display: flex; align-items: center; gap: 14px; }
+.logo { display: block; flex-shrink: 0; }
 h1 { margin: 0; font-size: 26px; letter-spacing: 0.02em; color: var(--lavender); }
 h2 { font-size: 17px; margin: 0 0 10px; }
 .middle h2 { flex-shrink: 0; }
