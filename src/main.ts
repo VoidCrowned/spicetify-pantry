@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getVersion } from "@tauri-apps/api/app";
+import { check, type Update } from "@tauri-apps/plugin-updater";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { open, save } from "@tauri-apps/plugin-dialog";
 
@@ -309,6 +310,77 @@ function startRename(b: HTMLElement) {
   input.addEventListener("blur", () => !done && setTimeout(() => !done && input.focus()));
 }
 
+/** Release notes (Markdown bullets and paragraphs) as HTML. */
+function notesHtml(md: string) {
+  const out: string[] = [];
+  let list: string[] = [];
+  const flush = () => list.length && (out.push(`<ul>${list.join("")}</ul>`), (list = []));
+  for (const raw of md.split(/\r?\n/)) {
+    const line = raw.trim();
+    const inline = (t: string) => esc(t).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/`(.+?)`/g, "<code>$1</code>");
+    if (/^[-*] /.test(line)) list.push(`<li>${inline(line.slice(2))}</li>`);
+    else {
+      flush();
+      if (line.startsWith("#")) out.push(`<h3>${inline(line.replace(/^#+\s*/, ""))}</h3>`);
+      else if (line) out.push(`<p>${inline(line)}</p>`);
+    }
+  }
+  flush();
+  return out.join("") || `<p class="muted">No notes for this version.</p>`;
+}
+
+function showNotes(title: string, md: string) {
+  $("notes-title").textContent = title;
+  $("notes-body").innerHTML = notesHtml(md);
+  $<HTMLDialogElement>("notes").showModal();
+}
+
+let update: Update | null = null;
+async function checkForUpdate() {
+  try {
+    update = await check();
+  } catch {
+    return; // offline or no release yet: nothing to show
+  }
+  if (!update) return;
+  $("update-title").textContent = `Spicetify Pantry ${update.version} is available`;
+  $("update").hidden = false;
+}
+
+async function installUpdate() {
+  if (!update || busy) return;
+  const u = update;
+  const go = $<HTMLButtonElement>("update-go");
+  go.disabled = true;
+  $<HTMLButtonElement>("update-notes").disabled = true;
+  try {
+    await invoke("save_just_updated", { version: u.version, notes: u.body ?? "" });
+  } catch {
+    // Only the "What's new" pop-up depends on it; the update itself goes ahead.
+  }
+  let total = 0;
+  let done = 0;
+  try {
+    await u.downloadAndInstall((e) => {
+      if (e.event === "Started") total = e.data.contentLength ?? 0;
+      else if (e.event === "Progress") {
+        done += e.data.chunkLength;
+        $("update-text").textContent = total ? `Downloading… ${Math.round((done / total) * 100)} %` : `Downloading… ${size(done)}`;
+      } else if (e.event === "Finished") $("update-text").textContent = "Installing… Pantry restarts in a moment.";
+    });
+  } catch (e) {
+    $("update-text").textContent = `The update failed: ${e}. Nothing was changed.`;
+    go.disabled = false;
+    $<HTMLButtonElement>("update-notes").disabled = false;
+  }
+}
+
+/** After an update: show its notes once, on the first start of the new version. */
+async function showWhatsNew() {
+  const j = await invoke<{ version: string; notes: string } | null>("take_just_updated").catch(() => null);
+  if (j) showNotes(`What's new in v${j.version}`, j.notes);
+}
+
 async function selfTest() {
   if (busy) return;
   const out = $("selftest-result");
@@ -365,6 +437,10 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   $<HTMLDialogElement>("busy").addEventListener("cancel", (e) => busy && e.preventDefault());
   getVersion().then((v) => ($("version").textContent = `v${v}`));
+  showWhatsNew();
+  $("update-go").addEventListener("click", installUpdate);
+  $("update-notes").addEventListener("click", () => update && showNotes(`What's new in v${update.version}`, update.body ?? ""));
+  checkForUpdate();
   refreshStatus();
   refreshProfiles();
   setInterval(() => !busy && refreshStatus(), 5000);

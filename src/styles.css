@@ -56,6 +56,10 @@ h3 { font-size: 15px; margin: 0 0 2px; }
 .banner p { margin: 2px 0 0; }
 .banner-error { color: var(--bad); }
 .banner button { flex-shrink: 0; }
+.banner.update { border-color: var(--restore); background: rgba(0, 130, 115, 0.08); }
+.banner.update .icon, .banner.update strong { color: var(--restore); }
+.notes ul { margin: 4px 0 12px; padding-left: 20px; }
+.notes li { margin: 3px 0; }
 .banner strong.inline { display: inline; font-size: inherit; color: var(--text); }
 
 .backup { display: flex; align-items: center; gap: 16px; }
