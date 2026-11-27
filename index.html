@@ -31,6 +31,16 @@
         <button id="close-spotify">Close Spotify for me</button>
       </div>
 
+      <div id="update" class="banner update" role="status" hidden>
+        <span class="icon">↻</span>
+        <div class="text">
+          <strong id="update-title">An update is available</strong>
+          <p id="update-text">Pantry restarts on the new version after installing. Your profiles stay as they are.</p>
+        </div>
+        <button id="update-notes" class="quiet">What's new</button>
+        <button id="update-go">Install</button>
+      </div>
+
       <section class="backup">
         <button id="capture" class="main">Back up settings</button>
         <p class="hint">Saves your Spicetify extensions, theme and all their settings as a new profile.</p>
@@ -70,6 +80,14 @@
       <div class="actions">
         <button class="quiet" data-close>Cancel</button>
         <button id="confirm-go">Restore</button>
+      </div>
+    </dialog>
+
+    <dialog id="notes">
+      <h2 id="notes-title">What's new</h2>
+      <div id="notes-body" class="notes"></div>
+      <div class="actions">
+        <button data-close>OK</button>
       </div>
     </dialog>
 

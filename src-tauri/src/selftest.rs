@@ -152,6 +152,13 @@ pub fn run(roots: &Roots, dir: &Path, progress: Progress) -> SelfTest {
         }),
     );
     let _ = std::fs::remove_dir_all(&tmp);
+    progress("Checking for updates…");
+    t.add("Updater key", crate::update::pubkey_ok());
+    match crate::update::check_feed(env!("CARGO_PKG_VERSION")) {
+        crate::update::FeedCheck::Ok(d) => t.add("Update feed", Ok(d)),
+        crate::update::FeedCheck::Bad(d) => t.add("Update feed", Err(d)),
+        crate::update::FeedCheck::Skip(d) => t.skip("Update feed", &d),
+    }
     t.add("SHA-256", ok_if(capture::sha256_hex(b"abc") == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", "known vector matches", "wrong digest"));
 
     let mut bad = vec![];

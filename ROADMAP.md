@@ -32,6 +32,7 @@
 - [x] Rename profiles (#46)
 - [x] Show the app version (#51)
 - [x] Delete and Restore button colours (#52)
+- [ ] Self-updating Spicetify Pantry (#39)
 
 ## Future
 - Linux and macOS support (#16)
@@ -41,4 +42,3 @@
 - Version manager (#20)
 - Code signing (#28)
 - Install Spicetify when it's missing (#36)
-- Self-updating Spicetify Pantry (#39)

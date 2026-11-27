@@ -11,6 +11,7 @@ pub mod restore;
 pub mod selftest;
 pub mod spotify;
 pub mod transfer;
+pub mod update;
 
 use serde::Serialize;
 use std::path::PathBuf;
@@ -185,6 +186,23 @@ async fn import_profile(path: PathBuf) -> Result<transfer::Imported, String> {
     blocking(move || transfer::import(&profiles_dir(&r), &path, chrono::Utc::now())).await?
 }
 
+/// `%APPDATA%\Spicetify Pantry`
+fn data_dir(r: &detect::Roots) -> PathBuf {
+    profiles_dir(r).parent().map(PathBuf::from).unwrap_or_else(|| r.appdata.join("Spicetify Pantry"))
+}
+
+#[tauri::command]
+async fn save_just_updated(version: String, notes: String) -> Result<(), String> {
+    let r = roots()?;
+    update::save_just_updated(&data_dir(&r), &update::JustUpdated { version, notes }).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn take_just_updated() -> Result<Option<update::JustUpdated>, String> {
+    let r = roots()?;
+    Ok(update::take_just_updated(&data_dir(&r), env!("CARGO_PKG_VERSION")))
+}
+
 #[tauri::command]
 async fn rename_profile(id: String, name: String) -> Result<Option<String>, String> {
     let r = roots()?;
@@ -297,7 +315,9 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![status, list_profiles, profile_details, capture, restore_check, restore, self_test, open_profiles_folder, export_profile, import_profile, rename_profile, delete_profile, close_spotify])
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
+        .invoke_handler(tauri::generate_handler![status, list_profiles, profile_details, capture, restore_check, restore, self_test, open_profiles_folder, export_profile, import_profile, rename_profile, save_just_updated, take_just_updated, delete_profile, close_spotify])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
