@@ -35,7 +35,7 @@
 - [x] Self-updating Spicetify Pantry (#39)
 - [x] Progress dialog titles and width; Back up Spicetify button (#56)
 - [ ] Restore recovers when Spotify updates itself (#58)
-- [ ] Status wording; simpler close-Spotify text (#59)
+- [ ] Status wording, Start/Restart Spotify button (#59)
 
 ## Future
 - Linux and macOS support (#16)
