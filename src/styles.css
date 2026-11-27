@@ -14,7 +14,6 @@
   --disconnected: #ff9900;
   --bad: #ff5f6d;
   --restore: #008273;
-  --restore-text: #2ec4af;
   --delete: #a0053f;
   --gap: 16px;
   color-scheme: dark;
@@ -72,9 +71,9 @@ button.main { font-size: 16px; padding: 10px 20px; border-radius: 10px; flex-shr
 button.quiet { background: transparent; color: var(--text); border: 1px solid var(--outline); font-weight: 500; }
 button.quiet:hover { background: var(--dusk); filter: none; }
 /* Outlined; on hover the outline colour becomes the fill (#52). */
-button.danger { background: transparent; color: var(--bad); border: 1px solid var(--delete); font-weight: 500; }
+button.danger { background: transparent; color: var(--delete); border: 1px solid var(--delete); font-weight: 500; }
 button.danger:hover { background: var(--delete); color: #fff; filter: none; }
-button.go { background: transparent; color: var(--restore-text); border: 1px solid var(--restore); font-weight: 500; }
+button.go { background: transparent; color: var(--restore); border: 1px solid var(--restore); font-weight: 500; }
 button.go:hover { background: var(--restore); color: #fff; filter: none; }
 button.solid-danger { background: var(--delete); }
 
