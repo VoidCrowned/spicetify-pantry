@@ -29,6 +29,7 @@
 - [x] Rename to Spicetify Pantry (#30)
 - [x] Profile file names in local time, new card layout (#47)
 - [x] Data folder named Spicetify Pantry (#49)
+- [ ] Rename profiles (#46)
 
 ## Future
 - Linux and macOS support (#16)

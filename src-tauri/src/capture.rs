@@ -302,6 +302,7 @@ pub fn build(det: &Detection, live: Live, spicetify_version: Option<String>, sou
     Profile {
         format: FORMAT,
         created_at: now.to_rfc3339(),
+        name: None,
         id,
         reason: reason.into(),
         source: source.into(),

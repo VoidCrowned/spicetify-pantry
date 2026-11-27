@@ -118,6 +118,28 @@ pub fn run(roots: &Roots, dir: &Path, progress: Progress) -> SelfTest {
             )
         }),
     );
+    let ren = tmp.join("rename");
+    let named = Profile { id: "2026-11-27_10-10-04".into(), ..old.clone() };
+    t.add(
+        "Rename profiles",
+        named.save(&ren).map_err(|e| e.to_string()).and_then(|_| {
+            let set = profile::rename(&ren, &named.id, "  Laptop   setup ")?;
+            let listed = profile::list(&ren).first().and_then(|s| s.name.clone());
+            let file = ren.join("named.json");
+            transfer::export(&ren, &named.id, &file, false)?;
+            let travels = std::fs::read_to_string(&file).map_err(|e| e.to_string())?.contains("\"name\": \"Laptop setup\"");
+            let too_long = profile::rename(&ren, &named.id, &"x".repeat(profile::NAME_MAX + 1)).is_err();
+            let cleared = profile::rename(&ren, &named.id, "")?;
+            let mut v = serde_json::to_value(&named).map_err(|e| e.to_string())?;
+            v.as_object_mut().unwrap().remove("name");
+            let old_loads = serde_json::from_value::<Profile>(v).is_ok_and(|p| p.name.is_none());
+            ok_if(
+                set.as_deref() == Some("Laptop setup") && listed == set && travels && too_long && cleared.is_none() && old_loads,
+                "set, tidied, exported, length limit, cleared, old profiles load",
+                format!("set {set:?}, listed {listed:?}, in export {travels}, limit {too_long}, cleared {cleared:?}, old loads {old_loads}"),
+            )
+        }),
+    );
     let (old_dir, new_dir) = (tmp.join("Pantry"), tmp.join("Spicetify Pantry"));
     t.add(
         "Old data folder moved, clash keeps both",

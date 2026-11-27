@@ -6,7 +6,7 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 type Versions = { spotify: string | null; spicetify: string | null; marketplace: string | null };
 type Theme = { name: string | null; colourScheme: string | null; source: string };
 type Summary = {
-  id: string; createdAt: string; reason: string; source: string; versions: Versions; theme: Theme;
+  id: string; name: string | null; createdAt: string; reason: string; source: string; versions: Versions; theme: Theme;
   extensions: number; keys: number; unassigned: number; bytes: number; importedAt: string | null; shared: boolean;
 };
 type Imported = { id: string; alreadyThere: boolean; extensions: number; theme: string | null; colourScheme: string | null; shared: boolean };
@@ -16,7 +16,7 @@ type ExtensionDetails = {
   globals: string[]; scanned: boolean; keyInfo: KeyInfo[]; files: [string, number, string][]; records: number;
 };
 type Details = {
-  id: string; createdAt: string; reason: string; source: string; versions: Versions; theme: Theme;
+  id: string; name: string | null; createdAt: string; reason: string; source: string; versions: Versions; theme: Theme;
   marketplace: { storage: string; keys: string[] }; extensions: ExtensionDetails[];
   spotifyKeys: KeyInfo[]; unassigned: KeyInfo[]; notes: string[];
 };
@@ -96,14 +96,15 @@ async function refreshProfiles() {
     .map(
       (p) => `<article class="profile">
         <div class="info">
-          <h3>${when(p.createdAt)} ${p.reason === "before-restore" ? `<span class="badge">automatic, before a restore</span>` : ""}${p.source === "leveldb" ? `<span class="badge warn">read with Spotify closed</span>` : ""}${p.importedAt ? `<span class="badge">imported ${when(p.importedAt)}</span>` : ""}${p.shared ? `<span class="badge">shared copy</span>` : ""}</h3>
+          <h3><span class="title">${p.name ? esc(p.name) : when(p.createdAt)}</span><button class="rename" data-rename="${esc(p.id)}" data-name="${esc(p.name ?? "")}" data-placeholder="${esc(when(p.createdAt))}" title="Rename" aria-label="Rename">✎</button>${p.reason === "before-restore" ? `<span class="badge">automatic, before a restore</span>` : ""}${p.source === "leveldb" ? `<span class="badge warn">read with Spotify closed</span>` : ""}${p.importedAt ? `<span class="badge">imported ${when(p.importedAt)}</span>` : ""}${p.shared ? `<span class="badge">shared copy</span>` : ""}</h3>
+          ${p.name ? `<p class="muted">${when(p.createdAt)}</p>` : ""}
           <p class="muted">${p.extensions} extensions · theme: ${p.theme.name ? `${esc(p.theme.name)}${p.theme.colourScheme ? ` (${esc(p.theme.colourScheme)})` : ""}` : "none"} · ${p.keys} settings${p.unassigned ? ` (${p.unassigned} unassigned)` : ""}</p>
           <p class="muted">${size(p.bytes)} · Spotify ${short(p.versions.spotify)} · Spicetify ${esc(p.versions.spicetify ?? "?")}</p>
         </div>
         <div class="buttons">
           <button class="quiet" data-details="${esc(p.id)}">Details</button>
           <button class="quiet" data-export="${esc(p.id)}">Export</button>
-          <button class="danger" data-delete="${esc(p.id)}" data-when="${esc(when(p.createdAt))}">Delete</button>
+          <button class="danger" data-delete="${esc(p.id)}" data-label="${esc(p.name ? `“${p.name}” (${when(p.createdAt)})` : `from ${when(p.createdAt)}`)}">Delete</button>
           <button data-restore="${esc(p.id)}">Restore</button>
         </div>
       </article>`,
@@ -118,7 +119,7 @@ function keyTable(keys: KeyInfo[]) {
 
 async function showDetails(id: string) {
   const d = await invoke<Details>("profile_details", { id });
-  $("details-title").textContent = `Profile from ${when(d.createdAt)}`;
+  $("details-title").textContent = d.name ? `${d.name} – ${when(d.createdAt)}` : `Profile from ${when(d.createdAt)}`;
   const exts = d.extensions
     .map(
       (e) => `<details class="ext">
@@ -239,7 +240,7 @@ let deleting: string | null = null;
 function askDelete(id: string, label: string) {
   if (busy) return;
   deleting = id;
-  $("delete-text").textContent = `Delete the profile from ${label}? It goes to the Recycle Bin, so you can still get it back from there.`;
+  $("delete-text").textContent = `Delete the profile ${label}? It goes to the Recycle Bin, so you can still get it back from there.`;
   $<HTMLDialogElement>("delete").showModal();
 }
 
@@ -254,6 +255,45 @@ async function deleteProfile() {
     endBusy([{ name: "Delete", ok: false, detail: String(e) }], "Nothing was deleted.");
   }
   refreshProfiles();
+}
+
+/** Turns the card's title into a text field: Enter or clicking away saves, Esc cancels. */
+function startRename(b: HTMLElement) {
+  if (busy) return;
+  const title = b.parentElement?.querySelector<HTMLElement>(".title");
+  if (!title || title.querySelector("input")) return;
+  const input = document.createElement("input");
+  input.className = "rename-field";
+  input.value = b.dataset.name ?? "";
+  input.placeholder = b.dataset.placeholder ?? "";
+  input.maxLength = 80;
+  input.setAttribute("aria-label", "Profile name");
+  title.replaceChildren(input);
+  b.hidden = true;
+  input.focus();
+  input.select();
+  let done = false;
+  const finish = async (save: boolean) => {
+    if (done) return;
+    done = true;
+    if (save && input.value.trim() !== (b.dataset.name ?? "")) {
+      try {
+        await invoke("rename_profile", { id: b.dataset.rename, name: input.value });
+      } catch (e) {
+        startBusy("Renaming");
+        endBusy([{ name: "Rename", ok: false, detail: String(e) }], "The name wasn't changed.");
+      }
+    }
+    refreshProfiles();
+  };
+  input.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") finish(true);
+    else if (ev.key === "Escape") {
+      ev.preventDefault();
+      finish(false);
+    }
+  });
+  input.addEventListener("blur", () => finish(true));
 }
 
 async function selfTest() {
@@ -288,12 +328,13 @@ window.addEventListener("DOMContentLoaded", () => {
   $("close-spotify").addEventListener("click", closeSpotify);
   document.addEventListener("click", (ev) => {
     const t = ev.target as HTMLElement;
-    const b = t.closest<HTMLElement>("[data-details],[data-restore],[data-export],[data-delete],[data-close]");
+    const b = t.closest<HTMLElement>("[data-details],[data-restore],[data-export],[data-delete],[data-rename],[data-close]");
     if (!b) return;
     if (b.dataset.details) showDetails(b.dataset.details);
     else if (b.dataset.restore) askRestore(b.dataset.restore);
     else if (b.dataset.export) askExport(b.dataset.export);
-    else if (b.dataset.delete) askDelete(b.dataset.delete, b.dataset.when ?? b.dataset.delete);
+    else if (b.dataset.delete) askDelete(b.dataset.delete, b.dataset.label ?? b.dataset.delete);
+    else if (b.dataset.rename) startRename(b);
     else if (b.hasAttribute("data-close")) b.closest("dialog")?.close();
   });
   $<HTMLDialogElement>("busy").addEventListener("cancel", (e) => busy && e.preventDefault());
