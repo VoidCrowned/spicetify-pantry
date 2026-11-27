@@ -20,9 +20,13 @@ fn roots() -> Result<detect::Roots, String> {
     detect::Roots::from_env().ok_or_else(|| "APPDATA / LOCALAPPDATA not set".into())
 }
 
-/// `%APPDATA%\Pantry\profiles`
+/// `%APPDATA%\Spicetify Pantry\profiles`. The first call moves profiles over from the old `%APPDATA%\Pantry` (#49).
 pub fn profiles_dir(r: &detect::Roots) -> PathBuf {
-    r.appdata.join("Pantry").join("profiles")
+    static MOVED: std::sync::Once = std::sync::Once::new();
+    MOVED.call_once(|| {
+        profile::move_data_dir(&r.appdata.join("Pantry"), &r.appdata.join("Spicetify Pantry"));
+    });
+    r.appdata.join("Spicetify Pantry").join("profiles")
 }
 
 fn progress(app: &AppHandle) -> impl Fn(&str) + Sync + '_ {
@@ -58,7 +62,12 @@ async fn status() -> Result<Status, String> {
 #[tauri::command]
 async fn list_profiles() -> Result<Vec<profile::Summary>, String> {
     let r = roots()?;
-    blocking(move || profile::list(&profiles_dir(&r))).await
+    blocking(move || {
+        let dir = profiles_dir(&r);
+        profile::migrate(&dir, &chrono::Local);
+        profile::list(&dir)
+    })
+    .await
 }
 
 #[derive(Serialize)]

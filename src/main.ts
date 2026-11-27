@@ -32,7 +32,13 @@ type SelfTest = { summary: string; clipboard: string; results: { id: number; nam
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 const short = (v: string | null) => (v ? v.split(".").filter((p) => /^\d+$/.test(p)).join(".") : "?");
-const when = (iso: string) => new Date(iso).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const pad = (n: number) => String(n).padStart(2, "0");
+/** Local time as `27 Nov 2026, 10:10:04`, the same clock time as the profile's file name. */
+const when = (iso: string) => {
+  const d = new Date(iso);
+  return `${pad(d.getDate())} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+};
 const size = (n: number) => (n < 1024 ? `${n} B` : n < 1 << 20 ? `${(n / 1024).toFixed(1)} KB` : `${(n / (1 << 20)).toFixed(1)} MB`);
 const KIND: Record<string, string> = { local: "Local extension", marketplace: "Marketplace extension", theme: "Theme", "custom-app": "Custom app", snippet: "Snippet", spicetify: "Spicetify" };
 
@@ -91,7 +97,8 @@ async function refreshProfiles() {
       (p) => `<article class="profile">
         <div class="info">
           <h3>${when(p.createdAt)} ${p.reason === "before-restore" ? `<span class="badge">automatic, before a restore</span>` : ""}${p.source === "leveldb" ? `<span class="badge warn">read with Spotify closed</span>` : ""}${p.importedAt ? `<span class="badge">imported ${when(p.importedAt)}</span>` : ""}${p.shared ? `<span class="badge">shared copy</span>` : ""}</h3>
-          <p class="muted">${p.extensions} extensions · ${p.theme.name ? `${esc(p.theme.name)}${p.theme.colourScheme ? ` (${esc(p.theme.colourScheme)})` : ""}` : "no theme"} · ${p.keys} settings${p.unassigned ? ` (${p.unassigned} unassigned)` : ""} · Spotify ${short(p.versions.spotify)}, Spicetify ${esc(p.versions.spicetify ?? "?")} · ${size(p.bytes)}</p>
+          <p class="muted">${p.extensions} extensions · theme: ${p.theme.name ? `${esc(p.theme.name)}${p.theme.colourScheme ? ` (${esc(p.theme.colourScheme)})` : ""}` : "none"} · ${p.keys} settings${p.unassigned ? ` (${p.unassigned} unassigned)` : ""}</p>
+          <p class="muted">${size(p.bytes)} · Spotify ${short(p.versions.spotify)} · Spicetify ${esc(p.versions.spicetify ?? "?")}</p>
         </div>
         <div class="buttons">
           <button class="quiet" data-details="${esc(p.id)}">Details</button>

@@ -48,7 +48,8 @@ pub fn import(dir: &Path, src: &Path, now: chrono::DateTime<chrono::Utc>) -> Res
     if !profile::valid_id(&p.id) {
         return Err(format!("This profile has an invalid id ({:?}).", p.id));
     }
-    let base = p.id.split_once("Z-").map(|(a, _)| format!("{a}Z")).unwrap_or_else(|| p.id.clone());
+    // Old UTC ids (before #47) arrive under the local-time id they'd have been migrated to.
+    let base = profile::localise_id(profile::id_base(&p.id).unwrap_or(&p.id), &chrono::Local);
     let summary = |p: &Profile, already_there| Imported {
         id: p.id.clone(),
         already_there,
@@ -85,7 +86,7 @@ mod tests {
     use crate::profile::Extension;
 
     fn sample() -> Profile {
-        let mut p = Profile { format: FORMAT, id: "2026-11-25T22-59-04Z".into(), reason: "manual".into(), source: "cdp".into(), account_hash: Some("h".into()), ..Default::default() };
+        let mut p = Profile { format: FORMAT, id: "2026-11-25_23-59-04".into(), reason: "manual".into(), source: "cdp".into(), account_hash: Some("h".into()), ..Default::default() };
         p.storage.local_storage.insert("gpb:settings".into(), "{}".into());
         p.storage.local_storage.insert("ES|x".into(), "1".into());
         p.spotify_keys.push("ES|x".into());
@@ -124,9 +125,24 @@ mod tests {
         // A shared copy differs: it arrives as -2, and importing it again finds that one.
         export(d.path(), &p.id, &f, true).unwrap();
         let i = import(d.path(), &f, now()).unwrap();
-        assert_eq!((i.id.as_str(), i.already_there, i.shared), ("2026-11-25T22-59-04Z-2", false, true));
+        assert_eq!((i.id.as_str(), i.already_there, i.shared), ("2026-11-25_23-59-04-2", false, true));
         assert!(import(d.path(), &f, now()).unwrap().already_there);
         assert_eq!(profile::list(d.path()).len(), 2);
+    }
+
+    #[test]
+    fn old_utc_ids_are_converted_on_import() {
+        let (a, b) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let mut p = sample();
+        p.id = "2026-11-25T22-59-04Z".into();
+        p.save(a.path()).unwrap();
+        let f = a.path().join("out.json");
+        export(a.path(), &p.id, &f, false).unwrap();
+        let i = import(b.path(), &f, now()).unwrap();
+        let want = profile::localise_id(&p.id, &chrono::Local);
+        assert_eq!(i.id, want);
+        assert_eq!(Profile::load(&b.path().join(format!("{want}.json"))).unwrap().id, want);
+        assert!(import(b.path(), &f, now()).unwrap().already_there);
     }
 
     #[test]

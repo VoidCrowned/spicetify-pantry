@@ -72,7 +72,7 @@ pub fn run(roots: &Roots, dir: &Path, progress: Progress) -> SelfTest {
     t.add("Profile save and load round trip", p.save(&tmp).and_then(|f| Profile::load(&f)).map_err(|e| e.to_string()).and_then(|q| ok_if(q == p, "identical", "differs after loading")));
     let _ = std::fs::remove_dir_all(&tmp);
     let (a, b) = (tmp.join("a"), tmp.join("b"));
-    let mut q = Profile { format: profile::FORMAT, id: "2026-01-01T00-00-00Z".into(), account_hash: Some("h".into()), ..Default::default() };
+    let mut q = Profile { format: profile::FORMAT, id: "2026-01-01_00-00-00".into(), account_hash: Some("h".into()), ..Default::default() };
     q.storage.local_storage.insert("ext:setting".into(), "1".into());
     q.storage.local_storage.insert("spotify:own".into(), "1".into());
     q.spotify_keys.push("spotify:own".into());
@@ -89,6 +89,42 @@ pub fn run(roots: &Roots, dir: &Path, progress: Progress) -> SelfTest {
         "Shared export leaves out private data",
         transfer::export(&a, &q.id, &file, true).and_then(|_| std::fs::read_to_string(&file).map_err(|e| e.to_string())).and_then(|text| {
             ok_if(!text.contains("spotify:own") && !text.contains("someone") && !text.contains("\"h\"") && text.contains("ext:setting"), "no Spotify keys, account hash or paths", "private data in the shared file")
+        }),
+    );
+    let _ = std::fs::remove_dir_all(&tmp);
+    let cet = chrono::FixedOffset::east_opt(3600).unwrap();
+    let at = chrono::DateTime::parse_from_rfc3339("2026-11-27T09:10:04Z").unwrap();
+    let local_now = profile::new_id(&chrono::Local::now());
+    t.add(
+        "Profile names in local time",
+        ok_if(
+            profile::new_id(&at.with_timezone(&cet)) == "2026-11-27_10-10-04" && profile::valid_id(&local_now) && profile::id_base(&local_now) == Some(local_now.as_str()),
+            format!("09:10:04 UTC at +01:00 → 2026-11-27_10-10-04; now → {local_now}"),
+            "wrong id format",
+        ),
+    );
+    let mig = tmp.join("migrate");
+    let old = Profile { format: profile::FORMAT, id: "2026-11-27T09-10-04Z".into(), created_at: "2026-11-27T09:10:04+00:00".into(), ..Default::default() };
+    t.add(
+        "Old UTC profile names converted",
+        old.save(&mig).map_err(|e| e.to_string()).and_then(|_| {
+            Profile { id: "2026-11-27_10-10-04".into(), ..old.clone() }.save(&mig).map_err(|e| e.to_string())?;
+            let moved = profile::migrate(&mig, &cet);
+            let ids: Vec<String> = profile::list(&mig).into_iter().map(|s| s.id).collect();
+            ok_if(
+                moved.len() == 1 && moved[0].1 == "2026-11-27_10-10-04-2" && ids.len() == 2 && !mig.join("2026-11-27T09-10-04Z.json").exists(),
+                "2026-11-27T09-10-04Z → 2026-11-27_10-10-04-2 (the plain name was taken)",
+                format!("got {moved:?}, listed {ids:?}"),
+            )
+        }),
+    );
+    let (old_dir, new_dir) = (tmp.join("Pantry"), tmp.join("Spicetify Pantry"));
+    t.add(
+        "Old data folder moved, clash keeps both",
+        old.save(&new_dir.join("profiles")).and_then(|_| Profile { shared: true, ..old.clone() }.save(&old_dir.join("profiles"))).map_err(|e| e.to_string()).and_then(|_| {
+            let n = profile::move_data_dir(&old_dir, &new_dir);
+            let ids: Vec<String> = profile::list(&new_dir.join("profiles")).into_iter().map(|s| s.id).collect();
+            ok_if(n == 1 && ids.len() == 2 && !old_dir.exists(), "Pantry → Spicetify Pantry, both copies kept", format!("moved {n}, listed {ids:?}, old folder left: {}", old_dir.exists()))
         }),
     );
     let _ = std::fs::remove_dir_all(&tmp);

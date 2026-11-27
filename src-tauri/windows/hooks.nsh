@@ -1,6 +1,6 @@
 ; Spicetify Pantry used to be called "Pantry" (up to 0.3.x). A new product name installs as a separate app,
 ; so remove the old entry silently first. Only if it's really ours: same publisher and binary.
-; Profiles live in %APPDATA%\Pantry and aren't touched by either installer.
+; Profiles live in %APPDATA%\Spicetify Pantry (moved from %APPDATA%\Pantry on first start) and aren't touched by either installer.
 !macro NSIS_HOOK_PREINSTALL
   ReadRegStr $R0 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Pantry" "Publisher"
   ReadRegStr $R1 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Pantry" "MainBinaryName"
