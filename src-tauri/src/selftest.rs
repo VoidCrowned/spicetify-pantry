@@ -118,6 +118,15 @@ pub fn run(roots: &Roots, dir: &Path, progress: Progress) -> SelfTest {
             )
         }),
     );
+    let (old_dir, new_dir) = (tmp.join("Pantry"), tmp.join("Spicetify Pantry"));
+    t.add(
+        "Old data folder moved, clash keeps both",
+        old.save(&new_dir.join("profiles")).and_then(|_| Profile { shared: true, ..old.clone() }.save(&old_dir.join("profiles"))).map_err(|e| e.to_string()).and_then(|_| {
+            let n = profile::move_data_dir(&old_dir, &new_dir);
+            let ids: Vec<String> = profile::list(&new_dir.join("profiles")).into_iter().map(|s| s.id).collect();
+            ok_if(n == 1 && ids.len() == 2 && !old_dir.exists(), "Pantry → Spicetify Pantry, both copies kept", format!("moved {n}, listed {ids:?}, old folder left: {}", old_dir.exists()))
+        }),
+    );
     let _ = std::fs::remove_dir_all(&tmp);
     t.add("SHA-256", ok_if(capture::sha256_hex(b"abc") == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", "known vector matches", "wrong digest"));
 

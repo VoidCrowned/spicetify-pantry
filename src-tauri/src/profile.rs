@@ -311,6 +311,45 @@ pub fn delete(dir: &Path, id: &str) -> Result<(), String> {
     return std::fs::remove_file(&p).map_err(|e| e.to_string());
 }
 
+/// Moves profiles from the old data folder (`%APPDATA%\Pantry`, before #49) to the new one. Never overwrites:
+/// an identical file is just dropped, a different one with the same name is kept as `-2`, `-3`…
+/// The old folder is removed once it's empty. Returns how many profiles moved.
+pub fn move_data_dir(old: &Path, new: &Path) -> usize {
+    let (from, to) = (old.join("profiles"), new.join("profiles"));
+    if !from.is_dir() {
+        return 0;
+    }
+    if !new.exists() && std::fs::rename(old, new).is_ok() {
+        return std::fs::read_dir(&to).map(|d| d.flatten().count()).unwrap_or(0);
+    }
+    if std::fs::create_dir_all(&to).is_err() {
+        return 0;
+    }
+    let mut moved = 0;
+    for e in std::fs::read_dir(&from).into_iter().flatten().flatten() {
+        let (src, name) = (e.path(), e.file_name());
+        let dst = to.join(&name);
+        let done = if !dst.exists() {
+            std::fs::rename(&src, &dst).or_else(|_| std::fs::copy(&src, &dst).and_then(|_| std::fs::remove_file(&src))).is_ok()
+        } else if std::fs::read(&src).ok() == std::fs::read(&dst).ok() {
+            std::fs::remove_file(&src).is_ok()
+        } else {
+            // Same name, different content: keep both.
+            match (Profile::load(&src), src.file_stem().and_then(|s| s.to_str()).filter(|s| valid_id(s))) {
+                (Ok(mut p), Some(stem)) => {
+                    p.id = free_id(&to, stem);
+                    p.save(&to).is_ok() && std::fs::remove_file(&src).is_ok()
+                }
+                _ => false,
+            }
+        };
+        moved += done as usize;
+    }
+    let _ = std::fs::remove_dir(&from);
+    let _ = std::fs::remove_dir(old);
+    moved
+}
+
 /// The id for a capture at `now`, in the time zone `now` carries: `2026-11-27_10-10-04`.
 pub fn new_id<Tz: chrono::TimeZone>(now: &chrono::DateTime<Tz>) -> String
 where
@@ -464,5 +503,36 @@ mod tests {
             p.save(t.path()).unwrap();
         }
         assert_eq!(list(t.path())[0].id, "2026-10-25_02-10-00");
+    }
+
+    #[test]
+    fn old_data_folder_is_moved() {
+        let t = tempfile::tempdir().unwrap();
+        let (old, new) = (t.path().join("Pantry"), t.path().join("Spicetify Pantry"));
+        let p = sample();
+        p.save(&old.join("profiles")).unwrap();
+        assert_eq!(move_data_dir(&old, &new), 1);
+        assert!(!old.exists() && new.join("profiles").join(p.file_name()).is_file());
+        assert_eq!(move_data_dir(&old, &new), 0);
+    }
+
+    #[test]
+    fn moving_into_an_existing_folder_keeps_both() {
+        let t = tempfile::tempdir().unwrap();
+        let (old, new) = (t.path().join("Pantry"), t.path().join("Spicetify Pantry"));
+        let p = sample();
+        p.save(&new.join("profiles")).unwrap();
+        p.save(&old.join("profiles")).unwrap(); // identical: dropped
+        let mut q = sample();
+        q.id = "2026-01-02_00-00-00".into();
+        q.save(&old.join("profiles")).unwrap(); // new name: moved
+        let mut r = sample();
+        r.shared = true;
+        r.save(&old.join("profiles")).unwrap(); // overwrites the identical one in old/
+        assert_eq!(move_data_dir(&old, &new), 2);
+        let ids: Vec<String> = list(&new.join("profiles")).into_iter().map(|s| s.id).collect();
+        assert_eq!(ids.len(), 3, "{ids:?}");
+        assert!(ids.contains(&format!("{}-2", p.id)));
+        assert!(!old.exists());
     }
 }

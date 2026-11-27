@@ -20,9 +20,13 @@ fn roots() -> Result<detect::Roots, String> {
     detect::Roots::from_env().ok_or_else(|| "APPDATA / LOCALAPPDATA not set".into())
 }
 
-/// `%APPDATA%\Pantry\profiles`
+/// `%APPDATA%\Spicetify Pantry\profiles`. The first call moves profiles over from the old `%APPDATA%\Pantry` (#49).
 pub fn profiles_dir(r: &detect::Roots) -> PathBuf {
-    r.appdata.join("Pantry").join("profiles")
+    static MOVED: std::sync::Once = std::sync::Once::new();
+    MOVED.call_once(|| {
+        profile::move_data_dir(&r.appdata.join("Pantry"), &r.appdata.join("Spicetify Pantry"));
+    });
+    r.appdata.join("Spicetify Pantry").join("profiles")
 }
 
 fn progress(app: &AppHandle) -> impl Fn(&str) + Sync + '_ {

@@ -13,7 +13,7 @@ Spicetify Pantry is my Windows app. It backs up and restores Spicetify extension
 - **Export** saves a profile as one file, so I can set up another PC the same way: **Import profile…** there, then Restore. "For sharing with others" leaves out Spotify's own settings, the hashed account ID and Windows folder paths.
 - **Delete** moves a profile to the Recycle Bin.
 
-Pantry never writes to Spotify's storage files. It talks to Spotify through its debugging port while Spotify runs, and closes Spotify the normal way, never by force. Profiles stay on your PC in `%APPDATA%\Pantry\profiles`. They can contain API tokens that extensions store, even in a copy for sharing, so think before sharing one.
+Pantry never writes to Spotify's storage files. It talks to Spotify through its debugging port while Spotify runs, and closes Spotify the normal way, never by force. Profiles stay on your PC in `%APPDATA%\Spicetify Pantry\profiles`. They can contain API tokens that extensions store, even in a copy for sharing, so think before sharing one.
 
 Needs the regular Spotify installer (not the Microsoft Store version) and Spicetify. Builds aren't code-signed yet: Windows SmartScreen asks first (More info → Run anyway), and Windows 11 with Smart App Control on blocks Pantry.
 

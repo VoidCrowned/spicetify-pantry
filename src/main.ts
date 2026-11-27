@@ -97,7 +97,7 @@ async function refreshProfiles() {
       (p) => `<article class="profile">
         <div class="info">
           <h3>${when(p.createdAt)} ${p.reason === "before-restore" ? `<span class="badge">automatic, before a restore</span>` : ""}${p.source === "leveldb" ? `<span class="badge warn">read with Spotify closed</span>` : ""}${p.importedAt ? `<span class="badge">imported ${when(p.importedAt)}</span>` : ""}${p.shared ? `<span class="badge">shared copy</span>` : ""}</h3>
-          <p class="muted">${p.extensions} extensions · theme: ${p.theme.name ? `${esc(p.theme.name)}${p.theme.colourScheme ? ` (${esc(p.theme.colourScheme)})` : ""}` : "none"} · ${p.keys} settings (${p.unassigned} unassigned)</p>
+          <p class="muted">${p.extensions} extensions · theme: ${p.theme.name ? `${esc(p.theme.name)}${p.theme.colourScheme ? ` (${esc(p.theme.colourScheme)})` : ""}` : "none"} · ${p.keys} settings${p.unassigned ? ` (${p.unassigned} unassigned)` : ""}</p>
           <p class="muted">${size(p.bytes)} · Spotify ${short(p.versions.spotify)} · Spicetify ${esc(p.versions.spicetify ?? "?")}</p>
         </div>
         <div class="buttons">
