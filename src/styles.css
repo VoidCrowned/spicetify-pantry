@@ -95,7 +95,7 @@ button.rename:hover { color: var(--lavender); filter: none; }
 
 dialog { background: var(--panel); color: var(--text); border: 1px solid var(--outline); border-radius: 12px; padding: 20px 24px; width: min(720px, 92vw); max-height: 86vh; }
 /* The progress dialog fits its content, up to a fixed width (#56). */
-dialog#busy { width: fit-content; min-width: 320px; max-width: min(560px, 92vw); }
+dialog#busy { width: fit-content; min-width: 320px; max-width: min(560px, 92vw); overflow-wrap: anywhere; }
 dialog::backdrop { background: rgba(5, 6, 14, 0.7); }
 dialog h2 { margin-top: 0; }
 .dialog-head { display: flex; justify-content: space-between; align-items: center; }
