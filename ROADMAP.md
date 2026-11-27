@@ -25,7 +25,8 @@
 - [x] Delete profiles (#38)
 - [x] Details dialog: fixed header, scrolling list (#41)
 - [x] Close Spotify for me via Ctrl+Shift+Q (#43)
-- [ ] New app icon (#34)
+- [x] New app icon (#34)
+- [x] Rename to Spicetify Pantry (#30)
 
 ## Future
 - Linux and macOS support (#16)
@@ -34,6 +35,5 @@
 - Live sync via an optional companion extension (#19)
 - Version manager (#20)
 - Code signing (#28)
-- Rename to Spicetify-Pantry (#30)
 - Install Spicetify when it's missing (#36)
-- Self-updating Spicetify-Pantry (#39)
+- Self-updating Spicetify Pantry (#39)

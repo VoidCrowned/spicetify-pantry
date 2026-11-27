@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="1024" height="1024">
+  <title>Spicetify Pantry</title>
+  <rect x="84" y="26" width="88" height="28" rx="10" fill="#8372FD"/>
+  <rect x="36" y="62" width="184" height="180" rx="64" fill="#008273"/>
+  <g fill="none" stroke="#FFFFFF" stroke-linecap="round">
+    <path d="M76 124 Q128 104 182 132" stroke-width="19"/>
+    <path d="M84 160 Q128 143 174 166" stroke-width="15"/>
+    <path d="M92 194 Q128 180 164 199" stroke-width="12"/>
+  </g>
+</svg>

@@ -38,10 +38,10 @@ fn comparable(p: &Profile) -> Profile {
 
 pub fn import(dir: &Path, src: &Path, now: chrono::DateTime<chrono::Utc>) -> Result<Imported, String> {
     let bytes = std::fs::read(src).map_err(|e| format!("couldn't read {}: {e}", src.display()))?;
-    let v: serde_json::Value = serde_json::from_slice(&bytes).map_err(|_| "This isn't a Pantry profile (not valid JSON).".to_string())?;
+    let v: serde_json::Value = serde_json::from_slice(&bytes).map_err(|_| "This isn't a Spicetify Pantry profile (not valid JSON).".to_string())?;
     match v.get("format").and_then(|f| f.as_u64()) {
-        None => return Err("This isn't a Pantry profile (no format number).".into()),
-        Some(f) if f > FORMAT as u64 => return Err(format!("This profile was made by a newer Pantry (format {f}). Update Pantry, then import it.")),
+        None => return Err("This isn't a Spicetify Pantry profile (no format number).".into()),
+        Some(f) if f > FORMAT as u64 => return Err(format!("This profile was made by a newer Spicetify Pantry (format {f}). Update it, then import it.")),
         _ => {}
     }
     let mut p: Profile = serde_json::from_value(v).map_err(|e| format!("This profile is damaged: {e}"))?;
@@ -147,7 +147,7 @@ mod tests {
         let f = d.path().join("x.json");
         let cases: [(serde_json::Value, &str); 3] = [
             (serde_json::json!({ "hello": 1 }), "no format number"),
-            (serde_json::json!({ "format": 99 }), "newer Pantry"),
+            (serde_json::json!({ "format": 99 }), "newer Spicetify Pantry"),
             ({ let mut v = serde_json::to_value(sample()).unwrap(); v["id"] = "../../evil".into(); v }, "invalid id"),
         ];
         for (v, msg) in cases {

@@ -199,7 +199,7 @@ async function exportProfile() {
   const id = exporting;
   if (!id) return;
   const share = $<HTMLInputElement>("export-share").checked;
-  const path = await save({ defaultPath: `spicetify-pantry-${id}${share ? "-shared" : ""}.json`, filters: [{ name: "Pantry profile", extensions: ["json"] }] });
+  const path = await save({ defaultPath: `spicetify-pantry-${id}${share ? "-shared" : ""}.json`, filters: [{ name: "Spicetify Pantry profile", extensions: ["json"] }] });
   if (!path) return;
   $<HTMLDialogElement>("export").close();
   startBusy("Exporting");
@@ -213,7 +213,7 @@ async function exportProfile() {
 
 async function importProfile() {
   if (busy) return;
-  const path = await open({ multiple: false, directory: false, filters: [{ name: "Pantry profile", extensions: ["json"] }] });
+  const path = await open({ multiple: false, directory: false, filters: [{ name: "Spicetify Pantry profile", extensions: ["json"] }] });
   if (!path) return;
   startBusy("Importing");
   try {
