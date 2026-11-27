@@ -112,6 +112,7 @@ dialog#details .dialog-head, dialog#details .details-top { margin-right: 24px; f
 .warnings .fail, .steps .fail { color: var(--bad); }
 .steps { padding-left: 20px; }
 .steps li { margin: 4px 0; }
+.steps.single { list-style: none; padding-left: 0; } /* numbers only when there's more than one step */
 .steps .ok::marker { color: var(--connected); }
 .check { display: flex; gap: 8px; align-items: flex-start; color: var(--muted); }
 input[type="checkbox"] { accent-color: var(--button); }

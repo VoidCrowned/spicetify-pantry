@@ -158,6 +158,7 @@ function endBusy(steps: Step[], title: string, note = "") {
   $("busy-title").textContent = title;
   $("busy-step").textContent = note;
   $("busy-step").hidden = !note;
+  $("busy-result").classList.toggle("single", steps.length === 1);
   $("busy-result").innerHTML = steps.map((s) => `<li class="${s.ok ? "ok" : "fail"}"><strong>${esc(s.name)}</strong> ${esc(s.detail)}</li>`).join("");
   $("busy-close").hidden = false;
   refreshStatus();
