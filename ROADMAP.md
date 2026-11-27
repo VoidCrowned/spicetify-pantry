@@ -30,8 +30,8 @@
 - [x] Profile file names in local time, new card layout (#47)
 - [x] Data folder named Spicetify Pantry (#49)
 - [x] Rename profiles (#46)
-- [ ] Show the app version (#51)
-- [ ] Delete and Restore button colours (#52)
+- [x] Show the app version (#51)
+- [x] Delete and Restore button colours (#52)
 
 ## Future
 - Linux and macOS support (#16)
