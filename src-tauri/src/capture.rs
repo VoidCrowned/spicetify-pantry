@@ -341,7 +341,7 @@ pub enum CaptureError {
 impl std::fmt::Display for CaptureError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            CaptureError::NeedsExit => f.write_str("Spotify is running without Pantry's connection. Exit Spotify (⋯ → File → Exit), then try again."),
+            CaptureError::NeedsExit => f.write_str("Spotify is open without Pantry. Please fully close it (File → Exit, or right-click its tray icon → Quit), then try again."),
             CaptureError::Other(s) => f.write_str(s),
         }
     }

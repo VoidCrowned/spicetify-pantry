@@ -50,7 +50,9 @@ async function refreshStatus() {
   const el = $("status");
   try {
     const s = await invoke<Status>("status");
-    const parts: string[] = [s.spotifyState === "connected" ? `<span class="connected">connected</span>` : `<span class="disconnected">not connected</span>`];
+    // State only: Back up and Restore start Spotify with Pantry's connection themselves (#59).
+    const state = { connected: `<span class="connected">connected</span>`, closed: `<span>closed</span>`, runningWithoutPort: `<span class="disconnected">open without Pantry</span>` };
+    const parts: string[] = [state[s.spotifyState]];
     const sp = s.detection.spotify;
     if (!sp) parts.push(s.detection.storeSpotify ? `<span class="bad">Microsoft Store Spotify isn't supported by Spicetify. Install the regular version from spotify.com.</span>` : `<span class="bad">Spotify isn't installed</span>`);
     else parts.push(`Spotify ${short(sp.version)}`);

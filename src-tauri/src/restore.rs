@@ -218,6 +218,24 @@ pub fn marketplace_uses_indexeddb(userdata: &Path) -> Option<bool> {
     Some(code.contains("spicetify-marketplace") && code.contains("internal:local-storage-migrated"))
 }
 
+#[derive(Debug, PartialEq)]
+enum AfterStart {
+    Continue,
+    /// Spotify came up without Spicetify, or restarted itself without Pantry's port: it updated itself.
+    Reapply,
+    Fail,
+}
+
+/// What to do once Spotify was started for a restore (#58).
+fn after_start(page_loaded: bool, spicetify_loaded: bool, running: bool) -> AfterStart {
+    match (page_loaded, spicetify_loaded, running) {
+        (true, true, _) => AfterStart::Continue,
+        (true, false, _) => AfterStart::Reapply,
+        (false, _, true) => AfterStart::Reapply,
+        (false, _, false) => AfterStart::Fail,
+    }
+}
+
 /// The installed Marketplace version, from its start-up log line.
 pub fn marketplace_version(userdata: &Path) -> Option<String> {
     let code = std::fs::read_to_string(userdata.join("CustomApps").join("marketplace").join("extension.js")).ok()?;
@@ -317,11 +335,42 @@ pub fn restore(roots: &Roots, dir: &Path, id: &str, o: &Options, progress: Progr
     };
 
     progress("Starting Spotify…");
-    if let Err(e) = spotify::launch(&det.spotify.as_ref().unwrap().exe).map_err(|e| e.to_string()).and_then(|_| spotify::wait_ready(Duration::from_secs(90))) {
-        r.step("Start Spotify", false, e);
+    let exe = det.spotify.as_ref().unwrap().exe.clone();
+    if let Err(e) = spotify::launch(&exe) {
+        r.step("Start Spotify", false, e.to_string());
         return r;
     }
-    r.step("Start Spotify", true, "Running with Pantry's connection.");
+    let page = spotify::wait_page(Duration::from_secs(90)).is_ok();
+    let loaded = page && spotify::wait_ready(Duration::from_secs(30)).is_ok();
+    match after_start(page, loaded, spotify::is_running()) {
+        AfterStart::Continue => {
+            r.step("Start Spotify", true, "Running with Pantry's connection.");
+        }
+        AfterStart::Fail => {
+            r.step("Start Spotify", false, if page { "Spotify started, but Spicetify didn't load." } else { "Spotify didn't start." });
+            return r;
+        }
+        AfterStart::Reapply => {
+            // Spotify installed a waiting update on start and replaced the files Spicetify had patched (#58).
+            progress("Spotify updated itself: applying Spicetify again…");
+            let closed = if page { spotify::close(Duration::from_secs(30)) } else { crate::quit::quit_spotify(Some(&exe), Duration::from_secs(30)).map_err(|e| e.to_string()) };
+            if let Err(e) = closed {
+                r.step("Start Spotify", false, format!("Spotify updated itself while starting and couldn't be closed again: {e}. Run `spicetify backup apply`, then restore again."));
+                return r;
+            }
+            match spotify::spicetify(&cli, &["-n", "backup", "apply"]) {
+                Ok(o) if o.ok => {}
+                Ok(o) => return { r.step("Start Spotify", false, format!("Spotify updated itself; spicetify backup apply failed: {}", o.text.lines().last().unwrap_or(""))); r },
+                Err(e) => return { r.step("Start Spotify", false, format!("Spotify updated itself; spicetify backup apply failed: {e}")); r },
+            }
+            progress("Starting Spotify again…");
+            if let Err(e) = spotify::launch(&exe).map_err(|e| e.to_string()).and_then(|_| spotify::wait_ready(Duration::from_secs(90))) {
+                r.step("Start Spotify", false, format!("Spotify updated itself; after applying Spicetify again: {e}"));
+                return r;
+            }
+            r.step("Start Spotify", true, "Spotify updated itself while starting; Spicetify was applied again.");
+        }
+    }
 
     let live_mp = match wait_marketplace(&userdata, p.ini.custom_apps.iter().any(|a| a == "marketplace")) {
         Ok(m) => m,
@@ -488,6 +537,14 @@ mod tests {
         assert_eq!(marketplace_version(t.path()).as_deref(), Some("1.0.12"));
         std::fs::write(d.join("extension.js"), "localStorage.getItem(\"marketplace:installed-extensions\")").unwrap();
         assert_eq!(marketplace_uses_indexeddb(t.path()), Some(false));
+    }
+
+    #[test]
+    fn spotify_updating_itself_is_recovered() {
+        assert_eq!(after_start(true, true, true), AfterStart::Continue);
+        assert_eq!(after_start(true, false, true), AfterStart::Reapply); // new files, no Spicetify
+        assert_eq!(after_start(false, false, true), AfterStart::Reapply); // restarted without Pantry's port
+        assert_eq!(after_start(false, false, false), AfterStart::Fail);
     }
 
     #[test]
