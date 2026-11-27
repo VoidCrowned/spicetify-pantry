@@ -58,7 +58,12 @@ async fn status() -> Result<Status, String> {
 #[tauri::command]
 async fn list_profiles() -> Result<Vec<profile::Summary>, String> {
     let r = roots()?;
-    blocking(move || profile::list(&profiles_dir(&r))).await
+    blocking(move || {
+        let dir = profiles_dir(&r);
+        profile::migrate(&dir, &chrono::Local);
+        profile::list(&dir)
+    })
+    .await
 }
 
 #[derive(Serialize)]

@@ -12,7 +12,8 @@ pub const FORMAT: u32 = 1;
 #[serde(rename_all = "camelCase")]
 pub struct Profile {
     pub format: u32,
-    /// UTC timestamp, also the file name: `2026-11-25T22-59-04Z`.
+    /// Local time of the capture, also the file name: `2026-11-25_23-59-04`, `-2`… on a clash (#47).
+    /// Profiles from before #47 used UTC (`2026-11-25T22-59-04Z`); `migrate` renames them.
     pub id: String,
     pub created_at: String,
     /// "manual" or "before-restore" (the automatic capture before every restore).
@@ -224,14 +225,69 @@ pub fn list(dir: &Path) -> Vec<Summary> {
             })
         })
         .collect();
-    out.sort_by(|a, b| b.id.cmp(&a.id));
+    // Newest first by the real time: ids are local time, which repeats an hour when the clocks go back.
+    let at = |s: &Summary| chrono::DateTime::parse_from_rfc3339(&s.created_at).ok();
+    out.sort_by(|a, b| at(b).cmp(&at(a)).then_with(|| b.id.cmp(&a.id)));
     out
 }
 
-/// Profile ids are file names: a timestamp from `new_id`, optionally with `-2`, `-3`… after an import clash.
-pub fn valid_id(id: &str) -> bool {
+/// Profile ids are file names: a local timestamp from `new_id` (or an old UTC one from before #47),
+/// optionally with `-2`, `-3`… after a clash.
+fn id_re() -> &'static regex::Regex {
     static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
-    RE.get_or_init(|| regex::Regex::new(r"^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z(-\d{1,4})?$").unwrap()).is_match(id)
+    RE.get_or_init(|| regex::Regex::new(r"^(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}|\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z)(-\d{1,4})?$").unwrap())
+}
+
+pub fn valid_id(id: &str) -> bool {
+    id_re().is_match(id)
+}
+
+/// The timestamp part of an id, without its `-N`.
+pub fn id_base(id: &str) -> Option<&str> {
+    id_re().captures(id).and_then(|c| c.get(1)).map(|m| m.as_str())
+}
+
+/// `id` in the local-time scheme: an old UTC id becomes the local time it stood for (its `-N` dropped,
+/// `free_id` adds a new one if needed); anything else comes back as it is.
+pub fn localise_id<Tz: chrono::TimeZone>(id: &str, tz: &Tz) -> String
+where
+    Tz::Offset: std::fmt::Display,
+{
+    match id_base(id).filter(|b| b.ends_with('Z')).and_then(|b| chrono::NaiveDateTime::parse_from_str(b, "%Y-%m-%dT%H-%M-%SZ").ok()) {
+        Some(t) => new_id(&t.and_utc().with_timezone(tz)),
+        None => id.to_owned(),
+    }
+}
+
+/// `base`, or `base-2`, `base-3`… if a profile with that id is already in `dir`.
+pub fn free_id(dir: &Path, base: &str) -> String {
+    (1..10_000).map(|n| if n == 1 { base.to_owned() } else { format!("{base}-{n}") }).find(|id| !dir.join(format!("{id}.json")).exists()).unwrap_or_else(|| base.to_owned())
+}
+
+/// Renames profiles from before #47 (UTC file names) to local time. Returns the old → new ids;
+/// a file that can't be read or written stays as it is and is still listed.
+pub fn migrate<Tz: chrono::TimeZone>(dir: &Path, tz: &Tz) -> Vec<(String, String)>
+where
+    Tz::Offset: std::fmt::Display,
+{
+    let mut done = vec![];
+    let mut old: Vec<PathBuf> = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == "json") && p.file_stem().and_then(|s| s.to_str()).and_then(id_base).is_some_and(|b| b.ends_with('Z')))
+        .collect();
+    old.sort();
+    for path in old {
+        let Ok(mut p) = Profile::load(&path) else { continue };
+        let from = path.file_stem().unwrap().to_string_lossy().into_owned();
+        p.id = free_id(dir, &localise_id(&from, tz));
+        if p.save(dir).is_ok() && std::fs::remove_file(&path).is_ok() {
+            done.push((from, p.id));
+        }
+    }
+    done
 }
 
 /// The path of a profile in `dir`, or an error for an id that isn't a valid file name.
@@ -255,8 +311,12 @@ pub fn delete(dir: &Path, id: &str) -> Result<(), String> {
     return std::fs::remove_file(&p).map_err(|e| e.to_string());
 }
 
-pub fn new_id(now: chrono::DateTime<chrono::Utc>) -> String {
-    now.format("%Y-%m-%dT%H-%M-%SZ").to_string()
+/// The id for a capture at `now`, in the time zone `now` carries: `2026-11-27_10-10-04`.
+pub fn new_id<Tz: chrono::TimeZone>(now: &chrono::DateTime<Tz>) -> String
+where
+    Tz::Offset: std::fmt::Display,
+{
+    now.format("%Y-%m-%d_%H-%M-%S").to_string()
 }
 
 #[cfg(test)]
@@ -264,7 +324,7 @@ mod tests {
     use super::*;
 
     fn sample() -> Profile {
-        let mut p = Profile { format: FORMAT, id: "2026-11-25T22-59-04Z".into(), reason: "manual".into(), source: "cdp".into(), ..Default::default() };
+        let mut p = Profile { format: FORMAT, id: "2026-11-25_23-59-04".into(), reason: "manual".into(), source: "cdp".into(), ..Default::default() };
         p.storage.local_storage.insert("gpb:settings".into(), "{}".into());
         p.storage.local_storage.insert("ES|x".into(), "1".into());
         p.storage.local_storage.insert("mystery".into(), "1".into());
@@ -279,7 +339,7 @@ mod tests {
         let t = tempfile::tempdir().unwrap();
         let p = sample();
         let path = p.save(t.path()).unwrap();
-        assert_eq!(path.file_name().unwrap(), "2026-11-25T22-59-04Z.json");
+        assert_eq!(path.file_name().unwrap(), "2026-11-25_23-59-04.json");
         assert_eq!(Profile::load(&path).unwrap(), p);
         let l = list(t.path());
         assert_eq!(l.len(), 1);
@@ -339,9 +399,70 @@ mod tests {
     }
 
     #[test]
-    fn ids_sort_by_time_and_are_file_safe() {
-        let a = new_id(chrono::DateTime::parse_from_rfc3339("2026-11-25T09:05:00Z").unwrap().into());
-        assert_eq!(a, "2026-11-25T09-05-00Z");
-        assert!(!a.contains(':'));
+    fn ids_are_file_safe() {
+        let a = new_id(&chrono::DateTime::parse_from_rfc3339("2026-11-25T09:05:00Z").unwrap());
+        assert_eq!(a, "2026-11-25_09-05-00");
+        assert!(!a.contains(':') && valid_id(&a));
+    }
+
+    #[test]
+    fn ids_are_local_time() {
+        let cet = chrono::FixedOffset::east_opt(3600).unwrap();
+        let t = chrono::DateTime::parse_from_rfc3339("2026-11-27T09:10:04Z").unwrap().with_timezone(&cet);
+        assert_eq!(new_id(&t), "2026-11-27_10-10-04");
+        assert_eq!(localise_id("2026-11-27T09-10-04Z", &cet), "2026-11-27_10-10-04");
+        assert_eq!(localise_id("2026-11-27T09-10-04Z-3", &cet), "2026-11-27_10-10-04");
+        assert_eq!(localise_id("2026-11-27_10-10-04-2", &cet), "2026-11-27_10-10-04-2");
+        for ok in ["2026-11-27_10-10-04", "2026-11-27_10-10-04-2", "2026-11-27T09-10-04Z", "2026-11-27T09-10-04Z-12"] {
+            assert!(valid_id(ok), "{ok}");
+        }
+        for bad in ["selftest", "../x", "2026-11-27_10-10-04Z", "2026-11-27 10-10-04"] {
+            assert!(!valid_id(bad), "{bad}");
+        }
+        assert_eq!(id_base("2026-11-27_10-10-04-2"), Some("2026-11-27_10-10-04"));
+    }
+
+    #[test]
+    fn clashing_ids_get_a_number() {
+        let t = tempfile::tempdir().unwrap();
+        let p = sample();
+        p.save(t.path()).unwrap();
+        assert_eq!(free_id(t.path(), &p.id), format!("{}-2", p.id));
+        assert_eq!(free_id(t.path(), "2026-01-01_00-00-00"), "2026-01-01_00-00-00");
+    }
+
+    #[test]
+    fn old_utc_names_are_migrated() {
+        let t = tempfile::tempdir().unwrap();
+        let cet = chrono::FixedOffset::east_opt(3600).unwrap();
+        let mut a = sample();
+        a.id = "2026-11-27T09-10-04Z".into();
+        a.created_at = "2026-11-27T09:10:04+00:00".into();
+        a.save(t.path()).unwrap();
+        let mut b = a.clone();
+        b.id = "2026-11-27T09-10-04Z-2".into();
+        b.shared = true;
+        b.save(t.path()).unwrap();
+        let moved = migrate(t.path(), &cet);
+        assert_eq!(moved.len(), 2);
+        let l = list(t.path());
+        let ids: Vec<&str> = l.iter().map(|s| s.id.as_str()).collect();
+        assert!(ids.contains(&"2026-11-27_10-10-04") && ids.contains(&"2026-11-27_10-10-04-2"), "{ids:?}");
+        assert!(!t.path().join("2026-11-27T09-10-04Z.json").exists());
+        assert_eq!(Profile::load(&t.path().join("2026-11-27_10-10-04.json")).unwrap().id, "2026-11-27_10-10-04");
+        assert!(migrate(t.path(), &cet).is_empty());
+    }
+
+    #[test]
+    fn list_is_newest_first_by_time() {
+        let t = tempfile::tempdir().unwrap();
+        // Clocks go back: the later capture has the smaller local id.
+        for (id, at) in [("2026-10-25_02-30-00", "2026-10-25T00:30:00+00:00"), ("2026-10-25_02-10-00", "2026-10-25T01:10:00+00:00")] {
+            let mut p = sample();
+            p.id = id.into();
+            p.created_at = at.into();
+            p.save(t.path()).unwrap();
+        }
+        assert_eq!(list(t.path())[0].id, "2026-10-25_02-10-00");
     }
 }

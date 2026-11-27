@@ -27,6 +27,7 @@
 - [x] Close Spotify for me via Ctrl+Shift+Q (#43)
 - [x] New app icon (#34)
 - [x] Rename to Spicetify Pantry (#30)
+- [ ] Profile file names in local time, new card layout (#47)
 
 ## Future
 - Linux and macOS support (#16)

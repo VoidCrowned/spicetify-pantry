@@ -298,7 +298,7 @@ pub fn build(det: &Detection, live: Live, spicetify_version: Option<String>, sou
     if !spicetify_ext.keys.is_empty() {
         extensions.push(spicetify_ext);
     }
-    let id = new_id(now);
+    let id = new_id(&now.with_timezone(&chrono::Local));
     Profile {
         format: FORMAT,
         created_at: now.to_rfc3339(),
@@ -398,6 +398,7 @@ pub fn capture(roots: &Roots, dir: &Path, reason: &str, progress: Progress) -> R
     if source == "cdp" && !applied {
         p.notes.push("Spicetify wasn't applied when this was captured: settings and Marketplace data are included, extensions weren't running.".into());
     }
+    p.id = free_id(dir, &p.id);
     let path = p.save(dir).map_err(|e| CaptureError::Other(format!("saving the profile: {e}")))?;
     Ok((p, path))
 }
