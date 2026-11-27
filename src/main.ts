@@ -50,41 +50,60 @@ async function refreshStatus() {
   const el = $("status");
   try {
     const s = await invoke<Status>("status");
-    const parts: string[] = [s.spotifyState === "connected" ? `<span class="connected">connected</span>` : `<span class="disconnected">not connected</span>`];
+    // State only: Back up and Restore start Spotify with Pantry's connection themselves (#59).
+    const state = { connected: `<span class="connected">connected</span>`, closed: `<span>closed</span>`, runningWithoutPort: `<span class="disconnected">open without Pantry</span>` };
+    const parts: string[] = [state[s.spotifyState]];
     const sp = s.detection.spotify;
     if (!sp) parts.push(s.detection.storeSpotify ? `<span class="bad">Microsoft Store Spotify isn't supported by Spicetify. Install the regular version from spotify.com.</span>` : `<span class="bad">Spotify isn't installed</span>`);
     else parts.push(`Spotify ${short(sp.version)}`);
     parts.push(s.spicetifyVersion ? `Spicetify ${esc(s.spicetifyVersion)}` : `<span class="bad">Spicetify isn't installed</span>`);
     el.innerHTML = parts.join(" · ");
-    const open = s.spotifyState === "runningWithoutPort";
-    $("banner").hidden = !open;
-    if (!open) $("banner-error").hidden = true;
-    $<HTMLButtonElement>("capture").disabled = open;
+    spotifyState = s.spotifyState;
+    // The orange banner is only the fallback when Pantry couldn't close Spotify itself.
+    if (s.spotifyState !== "runningWithoutPort") $("banner").hidden = true;
+    if (!starting) {
+      const [label, hint] = MAIN[s.spotifyState];
+      $("capture").textContent = label;
+      $("capture-hint").textContent = hint;
+    }
   } catch (e) {
     el.textContent = String(e);
   }
 }
 
-let closing = false;
-async function closeSpotify() {
-  if (closing || busy) return;
-  closing = true;
-  const btn = $<HTMLButtonElement>("close-spotify");
-  const err = $("banner-error");
+type SpotifyState = Status["spotifyState"];
+let spotifyState: SpotifyState = "closed";
+/** The big button: Back up only once Pantry is connected; otherwise it gets Spotify there (#59). */
+const MAIN: Record<SpotifyState, [string, string]> = {
+  connected: ["Back up Spicetify", "Saves your Spicetify theme, extensions and all their settings as a new profile."],
+  runningWithoutPort: ["Restart Spotify", "Close Spotify, and open it through Spicetify Pantry."],
+  closed: ["Start Spotify", "Open Spotify through Spicetify Pantry."],
+};
+
+let starting = false;
+async function startSpotify() {
+  if (starting || busy) return;
+  starting = true;
+  const btn = $<HTMLButtonElement>("capture");
   btn.disabled = true;
-  btn.textContent = "Closing…";
-  err.hidden = true;
+  btn.textContent = spotifyState === "runningWithoutPort" ? "Restarting…" : "Starting…";
+  $("banner").hidden = true;
   try {
-    await invoke("close_spotify");
+    await invoke("start_spotify");
   } catch (e) {
-    err.textContent = String(e);
-    err.hidden = false;
+    $("banner-error").textContent = String(e);
+    $("banner-error").hidden = false;
+    $("banner").hidden = false;
   } finally {
-    closing = false;
+    starting = false;
     btn.disabled = false;
-    btn.textContent = "Close Spotify for me";
-    refreshStatus();
+    await refreshStatus();
   }
+}
+
+function mainAction() {
+  if (spotifyState === "connected") capture();
+  else startSpotify();
 }
 
 async function refreshProfiles() {
@@ -410,14 +429,13 @@ window.addEventListener("DOMContentLoaded", () => {
   listen<string>("progress", (e) => {
     if (busy) $("busy-step").textContent = e.payload;
   });
-  $("capture").addEventListener("click", capture);
+  $("capture").addEventListener("click", mainAction);
   $("confirm-go").addEventListener("click", restore);
   $("selftest").addEventListener("click", selfTest);
   $("open-folder").addEventListener("click", () => invoke("open_profiles_folder"));
   $("import").addEventListener("click", importProfile);
   $("export-go").addEventListener("click", exportProfile);
   $("delete-go").addEventListener("click", deleteProfile);
-  $("close-spotify").addEventListener("click", closeSpotify);
   // While a rename is open, clicks outside its field do nothing and don't take the focus away.
   for (const type of ["mousedown", "click"]) {
     document.addEventListener(

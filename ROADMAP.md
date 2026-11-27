@@ -33,7 +33,9 @@
 - [x] Show the app version (#51)
 - [x] Delete and Restore button colours (#52)
 - [x] Self-updating Spicetify Pantry (#39)
-- [ ] Progress dialog titles and width; Back up Spicetify button (#56)
+- [x] Progress dialog titles and width; Back up Spicetify button (#56)
+- [ ] Restore recovers when Spotify updates itself (#58)
+- [ ] Status wording, Start/Restart Spotify button (#59)
 
 ## Future
 - Linux and macOS support (#16)
