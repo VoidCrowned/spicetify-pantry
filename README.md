@@ -12,7 +12,7 @@ Get the latest `Spicetify-Pantry_<version>_x64-setup.exe` from [Releases](https:
 
 ## What it does
 
-- **Back up settings** saves a profile: Spotify and Spicetify versions, theme and colour scheme, your `config-xpui.ini` entries, local extension files, Marketplace installs, and every setting, grouped by extension. Nothing is dropped: settings no extension claims go to "unassigned".
+- **Back up Spicetify** saves a profile: Spotify and Spicetify versions, theme and colour scheme, your `config-xpui.ini` entries, local extension files, Marketplace installs, and every setting, grouped by extension. Nothing is dropped: settings no extension claims go to "unassigned".
 - **Restore** puts a profile back: it backs up your current setup first, writes the Spicetify files, runs `spicetify apply`, starts Spotify and writes the settings back, then checks that every extension is running.
 - **Export** saves a profile as one file, so I can set up another PC the same way: **Import profile…** there, then Restore. "For sharing with others" leaves out Spotify's own settings, the hashed account ID and Windows folder paths.
 - **Delete** moves a profile to the Recycle Bin.

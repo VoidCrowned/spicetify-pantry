@@ -91,7 +91,7 @@ async function refreshProfiles() {
   const list = await invoke<Summary[]>("list_profiles");
   const el = $("profiles");
   if (!list.length) {
-    el.innerHTML = `<p class="empty">No profiles yet. Press Back up settings to make the first one.</p>`;
+    el.innerHTML = `<p class="empty">No profiles yet. Press Back up Spicetify to make the first one.</p>`;
     return;
   }
   el.innerHTML = list
@@ -147,13 +147,17 @@ function startBusy(title: string) {
   busy = true;
   $("busy-title").textContent = title;
   $("busy-step").textContent = "Starting…";
+  $("busy-step").hidden = false;
   $("busy-result").innerHTML = "";
   $("busy-close").hidden = true;
   $<HTMLDialogElement>("busy").showModal();
 }
-function endBusy(steps: Step[], headline: string) {
+/** Finishes the progress dialog: the title says how it ended; `note` is an optional line under it. */
+function endBusy(steps: Step[], title: string, note = "") {
   busy = false;
-  $("busy-step").textContent = headline;
+  $("busy-title").textContent = title;
+  $("busy-step").textContent = note;
+  $("busy-step").hidden = !note;
   $("busy-result").innerHTML = steps.map((s) => `<li class="${s.ok ? "ok" : "fail"}"><strong>${esc(s.name)}</strong> ${esc(s.detail)}</li>`).join("");
   $("busy-close").hidden = false;
   refreshStatus();
@@ -165,9 +169,9 @@ async function capture() {
   startBusy("Backing up");
   try {
     const s = await invoke<Summary>("capture");
-    endBusy([{ name: "Saved", ok: true, detail: `${s.extensions} extensions and ${s.keys} settings.` }], "Done.");
+    endBusy([{ name: "Saved", ok: true, detail: `${s.extensions} extensions and ${s.keys} settings.` }], "Backed up");
   } catch (e) {
-    endBusy([{ name: "Back up", ok: false, detail: String(e) }], "Nothing was saved.");
+    endBusy([{ name: "Back up", ok: false, detail: String(e) }], "Back-up failed", "Nothing was saved.");
   }
 }
 
@@ -191,9 +195,10 @@ async function restore() {
   startBusy("Restoring");
   try {
     const r = await invoke<Report>("restore", { id, options: { includeSpotify: $<HTMLInputElement>("include-spotify").checked, acknowledged: true } });
-    endBusy(r.steps, r.ok ? "Restored. Spotify is running with your extensions and settings." : r.backupId ? `Stopped. Your setup from before is saved as a profile (${r.backupId}).` : "Stopped before changing anything.");
+    if (r.ok) endBusy(r.steps, "Restored", "Spotify is running with your extensions and settings.");
+    else endBusy(r.steps, "Restore stopped", r.backupId ? `Your setup from before is saved as a profile (${r.backupId}).` : "Nothing was changed.");
   } catch (e) {
-    endBusy([{ name: "Restore", ok: false, detail: String(e) }], "Stopped.");
+    endBusy([{ name: "Restore", ok: false, detail: String(e) }], "Restore stopped");
   }
 }
 
@@ -215,9 +220,9 @@ async function exportProfile() {
   startBusy("Exporting");
   try {
     await invoke("export_profile", { id, path, share });
-    endBusy([{ name: "Saved", ok: true, detail: `${path}${share ? " (for sharing)" : ""}` }], "Done.");
+    endBusy([{ name: "Saved", ok: true, detail: `${path}${share ? " (for sharing)" : ""}` }], "Exported");
   } catch (e) {
-    endBusy([{ name: "Export", ok: false, detail: String(e) }], "Nothing was saved.");
+    endBusy([{ name: "Export", ok: false, detail: String(e) }], "Export failed", "Nothing was saved.");
   }
 }
 
@@ -231,10 +236,11 @@ async function importProfile() {
     const theme = i.theme ? `${i.theme}${i.colourScheme ? ` (${i.colourScheme})` : ""}` : "no theme";
     endBusy(
       [{ name: i.alreadyThere ? "Already in your list" : "Imported", ok: true, detail: `${i.extensions} extensions, ${theme}${i.shared ? ", shared copy" : ""}.` }],
-      i.alreadyThere ? "Nothing new to add." : "Done. Press Restore on it to set up this PC the same way.",
+      i.alreadyThere ? "Already imported" : "Imported",
+      i.alreadyThere ? "Nothing new to add." : "Press Restore on it to set up this PC the same way.",
     );
   } catch (e) {
-    endBusy([{ name: "Import", ok: false, detail: String(e) }], "Nothing was added.");
+    endBusy([{ name: "Import", ok: false, detail: String(e) }], "Import failed", "Nothing was added.");
   }
 }
 
@@ -254,7 +260,7 @@ async function deleteProfile() {
     await invoke("delete_profile", { id });
   } catch (e) {
     startBusy("Deleting");
-    endBusy([{ name: "Delete", ok: false, detail: String(e) }], "Nothing was deleted.");
+    endBusy([{ name: "Delete", ok: false, detail: String(e) }], "Delete failed", "Nothing was deleted.");
   }
   refreshProfiles();
 }
@@ -295,7 +301,7 @@ function startRename(b: HTMLElement) {
         await invoke("rename_profile", { id: b.dataset.rename, name: input.value });
       } catch (e) {
         startBusy("Renaming");
-        endBusy([{ name: "Rename", ok: false, detail: String(e) }], "The name wasn't changed.");
+        endBusy([{ name: "Rename", ok: false, detail: String(e) }], "Rename failed", "The name wasn't changed.");
       }
     }
     refreshProfiles();
