@@ -22,6 +22,8 @@ pub struct CheckResult {
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SelfTest {
+    /// The Spicetify Pantry version that ran the test (#51).
+    pub version: String,
     pub summary: String,
     /// The summary line plus one line per failed check: what the button copies.
     pub clipboard: String,
@@ -232,7 +234,7 @@ pub fn run(roots: &Roots, dir: &Path, progress: Progress) -> SelfTest {
     let pass = t.0.iter().filter(|r| r.status == "pass").count();
     let skip = t.0.iter().filter(|r| r.status == "skip").count();
     let total = t.0.len() - skip;
-    let mut summary = format!("[pantry] self-test: {pass}/{total} passed");
+    let mut summary = format!("[pantry] v{} self-test: {pass}/{total} passed", env!("CARGO_PKG_VERSION"));
     if skip > 0 {
         summary.push_str(&format!(", {skip} skipped"));
     }
@@ -240,7 +242,7 @@ pub fn run(roots: &Roots, dir: &Path, progress: Progress) -> SelfTest {
     for r in t.0.iter().filter(|r| r.status == "fail") {
         clipboard.push_str(&format!("\n#{} {}: {}", r.id, r.name, r.detail));
     }
-    SelfTest { summary, clipboard, results: t.0 }
+    SelfTest { version: env!("CARGO_PKG_VERSION").into(), summary, clipboard, results: t.0 }
 }
 
 fn leveldb_fixture() -> Result<String, String> {

@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getVersion } from "@tauri-apps/api/app";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { open, save } from "@tauri-apps/plugin-dialog";
 
@@ -105,7 +106,7 @@ async function refreshProfiles() {
           <button class="quiet" data-details="${esc(p.id)}">Details</button>
           <button class="quiet" data-export="${esc(p.id)}">Export</button>
           <button class="danger" data-delete="${esc(p.id)}" data-label="${esc(p.name ? `“${p.name}” (${when(p.createdAt)})` : `from ${when(p.createdAt)}`)}">Delete</button>
-          <button data-restore="${esc(p.id)}">Restore</button>
+          <button class="go" data-restore="${esc(p.id)}">Restore</button>
         </div>
       </article>`,
     )
@@ -363,6 +364,7 @@ window.addEventListener("DOMContentLoaded", () => {
     else if (b.hasAttribute("data-close")) b.closest("dialog")?.close();
   });
   $<HTMLDialogElement>("busy").addEventListener("cancel", (e) => busy && e.preventDefault());
+  getVersion().then((v) => ($("version").textContent = `v${v}`));
   refreshStatus();
   refreshProfiles();
   setInterval(() => !busy && refreshStatus(), 5000);
