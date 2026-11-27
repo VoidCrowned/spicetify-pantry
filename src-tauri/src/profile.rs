@@ -15,6 +15,9 @@ pub struct Profile {
     /// Local time of the capture, also the file name: `2026-11-25_23-59-04`, `-2`… on a clash (#47).
     /// Profiles from before #47 used UTC (`2026-11-25T22-59-04Z`); `migrate` renames them.
     pub id: String,
+    /// My own name for it (#46); `None` shows the date and time instead.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     pub created_at: String,
     /// "manual" or "before-restore" (the automatic capture before every restore).
     pub reason: String,
@@ -188,6 +191,7 @@ impl Profile {
 #[serde(rename_all = "camelCase")]
 pub struct Summary {
     pub id: String,
+    pub name: Option<String>,
     pub created_at: String,
     pub reason: String,
     pub source: String,
@@ -217,6 +221,7 @@ pub fn list(dir: &Path) -> Vec<Summary> {
                 imported_at: p.imported_at,
                 shared: p.shared,
                 id: p.id,
+                name: p.name,
                 created_at: p.created_at,
                 reason: p.reason,
                 source: p.source,
@@ -297,6 +302,21 @@ pub fn path_of(dir: &Path, id: &str) -> std::io::Result<PathBuf> {
     } else {
         Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("not a profile id: {id:?}")))
     }
+}
+
+pub const NAME_MAX: usize = 80;
+
+/// Gives profile `id` a name; an empty (or all-space) name clears it. Returns the name as saved.
+pub fn rename(dir: &Path, id: &str, name: &str) -> Result<Option<String>, String> {
+    let name: String = name.chars().map(|c| if c.is_control() { ' ' } else { c }).collect::<String>().split_whitespace().collect::<Vec<_>>().join(" ");
+    if name.chars().count() > NAME_MAX {
+        return Err(format!("Names can be up to {NAME_MAX} characters."));
+    }
+    let path = path_of(dir, id).map_err(|e| e.to_string())?;
+    let mut p = Profile::load(&path).map_err(|_| format!("There's no profile {id}."))?;
+    p.name = (!name.is_empty()).then_some(name);
+    p.save(dir).map_err(|e| format!("couldn't save the profile: {e}"))?;
+    Ok(p.name)
 }
 
 /// Deletes profile `id` from `dir`: to the Recycle Bin, so a mis-click can be undone (permanently in unit tests).
@@ -413,8 +433,9 @@ mod tests {
         let mut v = serde_json::to_value(sample()).unwrap();
         v.as_object_mut().unwrap().remove("importedAt");
         v.as_object_mut().unwrap().remove("shared");
+        v.as_object_mut().unwrap().remove("name");
         let p: Profile = serde_json::from_value(v).unwrap();
-        assert!(p.imported_at.is_none() && !p.shared);
+        assert!(p.imported_at.is_none() && !p.shared && p.name.is_none());
     }
 
     #[test]
@@ -534,5 +555,22 @@ mod tests {
         assert_eq!(ids.len(), 3, "{ids:?}");
         assert!(ids.contains(&format!("{}-2", p.id)));
         assert!(!old.exists());
+    }
+
+    #[test]
+    fn rename_sets_tidies_and_clears() {
+        let t = tempfile::tempdir().unwrap();
+        let p = sample();
+        p.save(t.path()).unwrap();
+        assert_eq!(rename(t.path(), &p.id, "  Before   Spotify\nupdate ").unwrap().as_deref(), Some("Before Spotify update"));
+        assert_eq!(list(t.path())[0].name.as_deref(), Some("Before Spotify update"));
+        assert_eq!(Profile::load(&t.path().join(p.file_name())).unwrap().id, p.id);
+        assert!(rename(t.path(), &p.id, &"x".repeat(NAME_MAX + 1)).is_err());
+        assert_eq!(rename(t.path(), &p.id, &"é".repeat(NAME_MAX)).unwrap().map(|n| n.chars().count()), Some(NAME_MAX));
+        assert_eq!(rename(t.path(), &p.id, "   ").unwrap(), None);
+        let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(t.path().join(p.file_name())).unwrap()).unwrap();
+        assert!(v.get("name").is_none());
+        assert!(rename(t.path(), "2020-01-01_00-00-00", "x").is_err());
+        assert!(rename(t.path(), "../x", "x").is_err());
     }
 }

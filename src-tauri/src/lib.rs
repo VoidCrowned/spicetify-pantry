@@ -91,6 +91,7 @@ struct ExtensionDetails {
 #[serde(rename_all = "camelCase")]
 struct Details {
     id: String,
+    name: Option<String>,
     created_at: String,
     reason: String,
     source: String,
@@ -129,6 +130,7 @@ async fn profile_details(id: String) -> Result<Details, String> {
             spotify_keys: info(&p.spotify_keys),
             unassigned: info(&p.unassigned),
             id: p.id.clone(),
+            name: p.name.clone(),
             created_at: p.created_at.clone(),
             reason: p.reason.clone(),
             source: p.source.clone(),
@@ -184,6 +186,12 @@ async fn import_profile(path: PathBuf) -> Result<transfer::Imported, String> {
 }
 
 #[tauri::command]
+async fn rename_profile(id: String, name: String) -> Result<Option<String>, String> {
+    let r = roots()?;
+    blocking(move || profile::rename(&profiles_dir(&r), &id, &name)).await?
+}
+
+#[tauri::command]
 async fn delete_profile(id: String) -> Result<(), String> {
     let r = roots()?;
     blocking(move || profile::delete(&profiles_dir(&r), &id)).await?
@@ -220,11 +228,11 @@ async fn open_profiles_folder(app: AppHandle) -> Result<(), String> {
 
 /// Headless mode for automated checks: `pantry.exe --cli <command> [args] <out.json>`.
 /// Commands: `self-test`, `capture`, `list`, `restore <id> [--include-spotify] [--acknowledge]`,
-/// `export <id> <file> [--share]`, `import <file>`, `delete <id>`, `close-spotify`.
+/// `export <id> <file> [--share]`, `import <file>`, `rename <id> <name>` (empty name clears it), `delete <id>`, `close-spotify`.
 /// The release build has no console, so results go to the JSON file; progress lines go to `<out.json>.log`.
 pub fn cli(args: &[String]) -> i32 {
     let Some(out) = args.last().filter(|a| a.ends_with(".json")) else {
-        eprintln!("usage: pantry --cli <self-test|capture|list|restore <id>|export <id> <file>|import <file>|delete <id>|close-spotify> <out.json>");
+        eprintln!("usage: pantry --cli <self-test|capture|list|restore <id>|export <id> <file>|import <file>|rename <id> <name>|delete <id>|close-spotify> <out.json>");
         return 2;
     };
     let log = std::sync::Mutex::new(std::fs::File::create(format!("{out}.log")).ok());
@@ -265,6 +273,10 @@ pub fn cli(args: &[String]) -> i32 {
             Ok(i) => (0, serde_json::to_value(i).unwrap()),
             Err(e) => (1, serde_json::json!({ "error": e })),
         },
+        "rename" if args.len() >= 4 => match profile::rename(&dir, &args[1], &args[2]) {
+            Ok(name) => (0, serde_json::json!({ "id": args[1], "name": name })),
+            Err(e) => (1, serde_json::json!({ "error": e })),
+        },
         "delete" if args.len() >= 3 => match profile::delete(&dir, &args[1]) {
             Ok(()) => (0, serde_json::json!({ "deleted": args[1] })),
             Err(e) => (1, serde_json::json!({ "error": e })),
@@ -285,7 +297,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![status, list_profiles, profile_details, capture, restore_check, restore, self_test, open_profiles_folder, export_profile, import_profile, delete_profile, close_spotify])
+        .invoke_handler(tauri::generate_handler![status, list_profiles, profile_details, capture, restore_check, restore, self_test, open_profiles_folder, export_profile, import_profile, rename_profile, delete_profile, close_spotify])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

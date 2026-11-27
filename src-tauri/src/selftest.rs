@@ -22,6 +22,8 @@ pub struct CheckResult {
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SelfTest {
+    /// The Spicetify Pantry version that ran the test (#51).
+    pub version: String,
     pub summary: String,
     /// The summary line plus one line per failed check: what the button copies.
     pub clipboard: String,
@@ -118,6 +120,28 @@ pub fn run(roots: &Roots, dir: &Path, progress: Progress) -> SelfTest {
             )
         }),
     );
+    let ren = tmp.join("rename");
+    let named = Profile { id: "2026-11-27_10-10-04".into(), ..old.clone() };
+    t.add(
+        "Rename profiles",
+        named.save(&ren).map_err(|e| e.to_string()).and_then(|_| {
+            let set = profile::rename(&ren, &named.id, "  Laptop   setup ")?;
+            let listed = profile::list(&ren).first().and_then(|s| s.name.clone());
+            let file = ren.join("named.json");
+            transfer::export(&ren, &named.id, &file, false)?;
+            let travels = std::fs::read_to_string(&file).map_err(|e| e.to_string())?.contains("\"name\": \"Laptop setup\"");
+            let too_long = profile::rename(&ren, &named.id, &"x".repeat(profile::NAME_MAX + 1)).is_err();
+            let cleared = profile::rename(&ren, &named.id, "")?;
+            let mut v = serde_json::to_value(&named).map_err(|e| e.to_string())?;
+            v.as_object_mut().unwrap().remove("name");
+            let old_loads = serde_json::from_value::<Profile>(v).is_ok_and(|p| p.name.is_none());
+            ok_if(
+                set.as_deref() == Some("Laptop setup") && listed == set && travels && too_long && cleared.is_none() && old_loads,
+                "set, tidied, exported, length limit, cleared, old profiles load",
+                format!("set {set:?}, listed {listed:?}, in export {travels}, limit {too_long}, cleared {cleared:?}, old loads {old_loads}"),
+            )
+        }),
+    );
     let (old_dir, new_dir) = (tmp.join("Pantry"), tmp.join("Spicetify Pantry"));
     t.add(
         "Old data folder moved, clash keeps both",
@@ -210,7 +234,7 @@ pub fn run(roots: &Roots, dir: &Path, progress: Progress) -> SelfTest {
     let pass = t.0.iter().filter(|r| r.status == "pass").count();
     let skip = t.0.iter().filter(|r| r.status == "skip").count();
     let total = t.0.len() - skip;
-    let mut summary = format!("[pantry] self-test: {pass}/{total} passed");
+    let mut summary = format!("[pantry] v{} self-test: {pass}/{total} passed", env!("CARGO_PKG_VERSION"));
     if skip > 0 {
         summary.push_str(&format!(", {skip} skipped"));
     }
@@ -218,7 +242,7 @@ pub fn run(roots: &Roots, dir: &Path, progress: Progress) -> SelfTest {
     for r in t.0.iter().filter(|r| r.status == "fail") {
         clipboard.push_str(&format!("\n#{} {}: {}", r.id, r.name, r.detail));
     }
-    SelfTest { summary, clipboard, results: t.0 }
+    SelfTest { version: env!("CARGO_PKG_VERSION").into(), summary, clipboard, results: t.0 }
 }
 
 fn leveldb_fixture() -> Result<String, String> {

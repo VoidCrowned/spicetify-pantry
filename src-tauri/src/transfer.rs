@@ -32,8 +32,9 @@ pub struct Imported {
 }
 
 /// The profile without the import stamp, to compare a file with one already in the list.
+/// The same capture, whatever it's called and whenever it was imported.
 fn comparable(p: &Profile) -> Profile {
-    Profile { imported_at: None, ..p.clone() }
+    Profile { imported_at: None, name: None, ..p.clone() }
 }
 
 pub fn import(dir: &Path, src: &Path, now: chrono::DateTime<chrono::Utc>) -> Result<Imported, String> {
@@ -142,6 +143,21 @@ mod tests {
         let want = profile::localise_id(&p.id, &chrono::Local);
         assert_eq!(i.id, want);
         assert_eq!(Profile::load(&b.path().join(format!("{want}.json"))).unwrap().id, want);
+        assert!(import(b.path(), &f, now()).unwrap().already_there);
+    }
+
+    #[test]
+    fn names_travel_and_dont_block_recognition() {
+        let (a, b) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let p = sample();
+        p.save(a.path()).unwrap();
+        profile::rename(a.path(), &p.id, "Laptop setup").unwrap();
+        let f = a.path().join("out.json");
+        export(a.path(), &p.id, &f, true).unwrap();
+        let i = import(b.path(), &f, now()).unwrap();
+        assert_eq!(profile::list(b.path())[0].name.as_deref(), Some("Laptop setup"));
+        // Renamed again on this PC: importing the same file still finds it.
+        profile::rename(b.path(), &i.id, "Main PC").unwrap();
         assert!(import(b.path(), &f, now()).unwrap().already_there);
     }
 
